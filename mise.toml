@@ -1,5 +1,5 @@
 [tools]
-bun = "latest"
+bun = "1.4.4"
 
 # ─── Workspace (Aggregate) ───────────────────────────────────────────────────
 
@@ -42,6 +42,11 @@ run = "rm -rf packages/*/dist apps/*/dist examples/*/dist"
 
 # ─── Package: agentcue ───────────────────────────────────────────────────────
 
+[tasks."agentcue:build:client"]
+description = "Build only the browser overlay bundle (dist/client.js)"
+dir = "packages/agentcue"
+run = "node scripts/build.mjs --client-only"
+
 [tasks."agentcue:build"]
 description = "Build agentcue CLI, library, Vite plugin, and browser overlay bundles"
 dir = "packages/agentcue"
@@ -67,7 +72,7 @@ run = "bun test"
 
 [tasks."web:build"]
 description = "Build @agentcue/web showcase"
-depends = ["agentcue:build"]
+depends = ["agentcue:build:client"]
 dir = "apps/web"
 run = "bun scripts/build.mjs"
 

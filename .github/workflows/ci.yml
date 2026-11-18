@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -21,25 +22,88 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          fetch-depth: ${{ github.event_name == 'push' && 0 || 1 }}
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Detect changed scopes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            agentcue:
+              - 'packages/agentcue/**'
+              - 'examples/html/index.html'
+              - 'README.md'
+              - 'LICENSE'
+              - 'logo.svg'
+              - 'package.json'
+              - 'bun.lock'
+              - 'tsconfig.base.json'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
+            web:
+              - 'apps/web/**'
+              - 'packages/agentcue/src/client/**'
+              - 'packages/agentcue/src/shared/**'
+              - 'packages/agentcue/scripts/build.mjs'
+              - 'packages/agentcue/package.json'
+              - 'logo.svg'
+              - 'package.json'
+              - 'bun.lock'
+              - 'tsconfig.base.json'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
+            example_vite_react:
+              - 'examples/vite-react/**'
+              - 'packages/agentcue/src/index.ts'
+              - 'packages/agentcue/src/vite.ts'
+              - 'packages/agentcue/src/server/**'
+              - 'packages/agentcue/src/shared/**'
+              - 'packages/agentcue/src/client/**'
+              - 'packages/agentcue/scripts/build.mjs'
+              - 'packages/agentcue/package.json'
+              - 'packages/agentcue/tsconfig*.json'
+              - 'package.json'
+              - 'bun.lock'
+              - 'tsconfig.base.json'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
 
-      # Mirrors `mise run check` (build + test) without installing mise/Node.
-      - name: Build all targets
+      - name: Setup toolchain
+        if: >-
+          steps.changes.outputs.agentcue == 'true' ||
+          steps.changes.outputs.web == 'true' ||
+          steps.changes.outputs.example_vite_react == 'true'
+        uses: ./.github/actions/setup
+        with:
+          install: >-
+            ${{
+              steps.changes.outputs.agentcue == 'true' ||
+              steps.changes.outputs.example_vite_react == 'true'
+            }}
+
+      - name: Build and test affected targets
+        if: >-
+          steps.changes.outputs.agentcue == 'true' ||
+          steps.changes.outputs.web == 'true' ||
+          steps.changes.outputs.example_vite_react == 'true'
         run: |
-          (cd packages/agentcue && bun scripts/build.mjs)
-          (cd apps/web && bun scripts/build.mjs)
-          (cd examples/vite-react && bunx tsc --noEmit && bunx vite build)
+          tasks=()
+          [ "${{ steps.changes.outputs.agentcue }}" = "true" ] && tasks+=(agentcue:test)
+          [ "${{ steps.changes.outputs.web }}" = "true" ] && tasks+=(web:build)
+          [ "${{ steps.changes.outputs.example_vite_react }}" = "true" ] && tasks+=(example:vite-react:build)
 
-      - name: Run test suite
-        run: (cd packages/agentcue && bun test)
+          args=()
+          for t in "${tasks[@]}"; do
+            [ ${#args[@]} -gt 0 ] && args+=(:::)
+            args+=("$t")
+          done
+          mise run "${args[@]}"
 
       - name: Verify package tarball
+        if: steps.changes.outputs.agentcue == 'true'
         working-directory: packages/agentcue
         run: bun pm pack --dry-run

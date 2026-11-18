@@ -15,7 +15,7 @@ const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(pkgRoot, "..", "..");
 const distDir = join(pkgRoot, "dist");
 
-function buildAll({ skipTypes = false } = {}) {
+function buildAll({ skipTypes = false, clientOnly = false } = {}) {
   mkdirSync(distDir, { recursive: true });
 
   execFileSync(
@@ -33,6 +33,11 @@ function buildAll({ skipTypes = false } = {}) {
     ],
     { stdio: "inherit" }
   );
+
+  if (clientOnly) {
+    console.log("Built dist/client.js");
+    return;
+  }
 
   execFileSync(
     "bun",
@@ -118,9 +123,10 @@ function buildAll({ skipTypes = false } = {}) {
 
 const isWatch = process.argv.includes("--watch");
 const noInitial = process.argv.includes("--no-initial");
+const clientOnly = process.argv.includes("--client-only");
 
 if (!noInitial) {
-  buildAll();
+  buildAll({ clientOnly });
 }
 
 if (isWatch) {
