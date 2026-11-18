@@ -58,6 +58,14 @@ Then attach the overlay in the browser using any output printed in your terminal
 - **Bookmarklet**: run the zero-config Bookmarklet URL on any local page
 - **Built-in playground**: open `http://localhost:4318/demo` to test live edits immediately
 
+### Browser Extension (Chrome / Edge / Arc / Brave)
+
+Use the Manifest V3 browser extension (`packages/extension`) to activate **Pick Mode** on any tab with a single toolbar click or `Cmd/Ctrl + Shift + F`, while automatically mounting the collapsed `✦` launcher on `localhost` / `127.0.0.1` dev servers:
+
+1. Download [`agentcue-extension.zip`](https://agentcue.yuler.dev/agentcue-extension.zip) (or build locally with `mise run extension:build` to produce `packages/extension/dist`).
+2. Open `chrome://extensions`, enable **Developer mode**, and click **Load unpacked** pointing to the unzipped folder (or `packages/extension/dist`).
+3. Start `npx agentcue` in your project workspace (or use `C` / **Copy Markdown** standalone on any webpage without a local bridge). Right-click the extension icon to configure a custom Bridge URL or toggle `localhost` auto-mount.
+
 ## Browser Shortcuts
 
 | Shortcut                   | Action                                                            |
@@ -107,12 +115,13 @@ mise run check
 
 ### Workspace Targets
 
-| Workspace             | Description                                          | Dev / Start Command               | Port    |
-| --------------------- | ---------------------------------------------------- | --------------------------------- | ------- |
-| `packages/agentcue`   | CLI, local HTTP/SSE bridge, Vite plugin, and overlay | `mise run agentcue:start`         | `:4318` |
-| `apps/web`            | Official showcase and interactive documentation      | `mise run web:dev`                | `:4319` |
-| `examples/html`       | Plain HTML playground with live reload               | `mise run example:html:dev`       | `:4320` |
-| `examples/vite-react` | Vite + React + TypeScript HMR playground             | `mise run example:vite-react:dev` | `:5173` |
+| Workspace             | Description                                                | Dev / Start Command               | Port    |
+| --------------------- | ---------------------------------------------------------- | --------------------------------- | ------- |
+| `packages/agentcue`   | CLI, local HTTP/SSE bridge, Vite plugin, and overlay       | `mise run agentcue:start`         | `:4318` |
+| `packages/extension`  | Manifest V3 browser extension (unpacked + `.zip` bundle)   | `mise run extension:dev`          | —       |
+| `apps/web`            | Official showcase and interactive documentation            | `mise run web:dev`                | `:4319` |
+| `examples/html`       | Plain HTML playground with live reload                     | `mise run example:html:dev`       | `:4320` |
+| `examples/vite-react` | Vite + React + TypeScript HMR playground                   | `mise run example:vite-react:dev` | `:5173` |
 
 Other workspace tasks: `mise run build`, `mise run test`, and `mise run clean`.
 

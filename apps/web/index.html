@@ -100,6 +100,8 @@
               data-en="Vite Plugin" data-zh="Vite 插件">Vite Plugin</button>
             <button type="button" class="qs-tab" data-tab="qs-cli"
               data-en="Standalone CLI" data-zh="独立 CLI">Standalone CLI</button>
+            <button type="button" class="qs-tab" data-tab="qs-ext"
+              data-en="Browser Extension" data-zh="浏览器插件">Browser Extension</button>
           </div>
           <div class="qs-panel active" id="qs-vite">
             <div class="code-block">
@@ -121,6 +123,27 @@
               <button type="button" class="copy-btn" data-copy='<script src="http://localhost:4318/client.js"></script>'>
                 <span class="copy-status">Copy</span>
               </button>
+            </div>
+          </div>
+          <div class="qs-panel" id="qs-ext">
+            <div class="code-block">
+              <code>npx agentcue</code>
+              <button type="button" class="copy-btn" data-copy="npx agentcue">
+                <span class="copy-status">Copy</span>
+              </button>
+            </div>
+            <div class="code-block">
+              <code
+                data-en="chrome://extensions → Load unpacked (or unzip agentcue-extension.zip)"
+                data-zh="chrome://extensions → 加载已解压的扩展程序 (解压 agentcue-extension.zip)"
+              >chrome://extensions → Load unpacked (or unzip agentcue-extension.zip)</code>
+              <a
+                href="./agentcue-extension.zip"
+                download="agentcue-extension.zip"
+                class="copy-btn"
+                data-en="Download .zip"
+                data-zh="下载 .zip"
+              >Download .zip</a>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-// Shadow DOM template and coordinate helpers live in ./dom.ts
+// Shadow DOM template and coordinate helpers live in ./dom.ts; bridge transport lives in ./transport.ts
 import {
   buildCuePayload,
   clamp,
@@ -19,6 +19,10 @@ import {
   type ActivePin,
 } from "./dom.ts";
 import { extractPinContext } from "./extract.ts";
+import {
+  createHttpBridgeTransport,
+  type BridgeTransport,
+} from "./transport.ts";
 import { formatCuePrompt } from "../shared/prompt.ts";
 import {
   SUPPORTED_AGENTS,
@@ -29,7 +33,22 @@ import {
 
 const STORAGE_AGENT_KEY = "agentcue:selected-agent";
 
-export function mountOverlay(serverOrigin: string): { togglePickMode: () => void } {
+export interface MountOverlayOptions {
+  transport?: BridgeTransport;
+  startActive?: boolean;
+}
+
+export interface OverlayInstance {
+  togglePickMode: () => void;
+  setActive: (next: boolean) => void;
+  isActive: () => boolean;
+}
+
+export function mountOverlay(
+  serverOrigin: string,
+  options?: MountOverlayOptions
+): OverlayInstance {
+  const transport = options?.transport ?? createHttpBridgeTransport(serverOrigin);
   const isMac = isMacPlatform();
   const modEnterLabel = isMac ? "⌘↵" : "Ctrl+↵";
   const activateKeyLabel = isMac ? "⌘⇧F" : "Ctrl+Shift+F";
@@ -343,14 +362,9 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
     renderPins();
 
     try {
-      const res = await fetch(`${serverOrigin}/api/cue`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json()) as { cueId?: string; error?: string; queuePosition?: number };
-      if (!res.ok || !data.cueId) {
-        restoreFailedBatch(snapshot, data.error || `HTTP ${res.status}`, wasFirstInSession);
+      const data = await transport.sendCue(payload);
+      if (!data.ok || !data.cueId) {
+        restoreFailedBatch(snapshot, data.error || `HTTP ${data.status}`, wasFirstInSession);
         return;
       }
       if (earlyCueErrors.has(data.cueId)) {
@@ -563,14 +577,12 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
   window.addEventListener("resize", scheduleReposition, { passive: true });
 
   function connectSSE() {
-    const es = new EventSource(`${serverOrigin}/api/events`);
-    es.onopen = () => {
-      connected = true;
-      renderStatus();
-    };
-    es.onmessage = (msg) => {
-      try {
-        const event = JSON.parse(msg.data) as ServerEvent;
+    transport.subscribeEvents({
+      onOpen: () => {
+        connected = true;
+        renderStatus();
+      },
+      onEvent: (event: ServerEvent) => {
         if (event.type === "state") {
           serverState = event.state;
           if (event.state.agents.length > 0) {
@@ -595,22 +607,25 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
             earlyCueErrors.set(event.cueId, event.error);
           }
         }
-      } catch {
-        // ignore malformed frames
-      }
-    };
-    es.onerror = () => {
-      connected = false;
-      renderStatus();
-    };
+      },
+      onError: () => {
+        connected = false;
+        renderStatus();
+      },
+    });
   }
 
   renderAgentOptions();
   renderControls();
   renderStatus();
   connectSSE();
+  if (options?.startActive) {
+    setActive(true);
+  }
 
   return {
     togglePickMode: () => setActive(!active),
+    setActive,
+    isActive: () => active,
   };
 }
