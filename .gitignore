@@ -8,3 +8,4 @@ dist/
 .scratch/
 packages/agentcue/README.md
 packages/agentcue/LICENSE
+packages/agentcue/logo.svg

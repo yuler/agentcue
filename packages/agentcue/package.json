@@ -28,7 +28,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "logo.svg"
   ],
   "peerDependencies": {
     "vite": ">=4.0.0"

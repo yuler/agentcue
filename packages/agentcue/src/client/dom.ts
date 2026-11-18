@@ -246,6 +246,7 @@ export function renderHoverElements(
   hoverTag.classList.add("visible");
 }
 
+export const ICON_LOGO = `<svg class="launcher-logo" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 9.5V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h2.5" stroke="#60a5fa" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="9.5" r="1.75" fill="#60a5fa"/><path d="M15.5 10C16.15 14.05 16.95 14.85 21 15.5C16.95 16.15 16.15 16.95 15.5 21C14.85 16.95 14.05 16.15 10 15.5C14.05 14.85 14.85 14.05 15.5 10Z" fill="currentColor"/></svg>`;
 export const ICON_PAUSE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="9" y1="6" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="18"/></svg>`;
 export const ICON_PICK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>`;
 export const ICON_EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
@@ -289,7 +290,7 @@ export function createOverlayDom(modEnterLabel: string, activateKeyLabel: string
       <div class="toolbar-stage">
         <button class="launcher" id="launcherBtn" title="Activate agentcue (${activateKeyLabel})">
           <span class="status-dot offline" id="launcherDot"></span>
-          <span>✦</span>
+          ${ICON_LOGO}
           <span class="launcher-text" id="launcherText"></span>
           <span class="launcher-count" id="launcherCount">0</span>
         </button>

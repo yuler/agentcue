@@ -104,7 +104,7 @@ function buildAll({ skipTypes = false } = {}) {
     copyFileSync(demoSrc, join(distDir, "demo.html"));
   }
 
-  for (const docFile of ["README.md", "LICENSE"]) {
+  for (const docFile of ["README.md", "LICENSE", "logo.svg"]) {
     const src = join(repoRoot, docFile);
     if (existsSync(src)) {
       copyFileSync(src, join(pkgRoot, docFile));

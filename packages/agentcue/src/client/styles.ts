@@ -258,6 +258,7 @@ export const OVERLAY_CSS = `
     opacity 140ms ease,
     visibility 0s linear 210ms;
 }
+.launcher-logo { width: 16px; height: 16px; flex-shrink: 0; display: block; }
 .launcher-text { font-size: 11.5px; font-weight: 500; color: #cbd5e1; white-space: nowrap; }
 .launcher-text:empty { display: none; }
 .launcher-count {
