@@ -6,6 +6,7 @@ dist/
 .env.*
 !.env.example
 .scratch/
+.worktree/
 packages/agentcue/README.md
 packages/agentcue/LICENSE
 packages/agentcue/logo.svg
