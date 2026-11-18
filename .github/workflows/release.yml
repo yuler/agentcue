@@ -30,18 +30,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Setup mise & Bun
-        uses: jdx/mise-action@v2
+          bun-version: latest
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -51,7 +47,7 @@ jobs:
         env:
           INPUT_BUMP: ${{ inputs.bump || 'patch' }}
         run: |
-          node --input-type=module <<'EOF'
+          bun - <<'EOF'
           import { appendFileSync, copyFileSync, readFileSync, writeFileSync } from "node:fs";
           import { execFileSync } from "node:child_process";
 
@@ -135,14 +131,20 @@ jobs:
             }
           }
 
-          const pkgSemver = parseSemver(pkg.version) || [0, 0, 1];
+          // package.json version is a repo placeholder (0.0.0). Real version is
+          // derived from npm + git tags in CI and stamped only for publish.
+          const pkgSemver = parseSemver(pkg.version);
+          const placeholder =
+            !pkgSemver || (pkgSemver[0] === 0 && pkgSemver[1] === 0 && pkgSemver[2] === 0);
           let targetSemver;
           if (!highestReleased) {
             const initialFloor = [0, 0, 1];
-            targetSemver = cmpSemver(pkgSemver, initialFloor) > 0 ? pkgSemver : initialFloor;
+            targetSemver =
+              !placeholder && cmpSemver(pkgSemver, initialFloor) > 0 ? pkgSemver : initialFloor;
           } else {
             const bumped = bumpSemver(highestReleased, bump);
-            targetSemver = cmpSemver(pkgSemver, bumped) > 0 ? pkgSemver : bumped;
+            targetSemver =
+              !placeholder && cmpSemver(pkgSemver, bumped) > 0 ? pkgSemver : bumped;
           }
 
           const nextVersion = fmtSemver(targetSemver);
@@ -160,19 +162,23 @@ jobs:
 
       - name: Build and run test suite
         if: steps.version.outputs.skip != 'true'
-        run: mise run check
+        run: |
+          (cd packages/agentcue && bun scripts/build.mjs)
+          (cd apps/web && bun scripts/build.mjs)
+          (cd examples/vite-react && bunx tsc --noEmit && bunx vite build)
+          (cd packages/agentcue && bun test)
 
       - name: Publish to npm
         if: steps.version.outputs.skip != 'true'
         working-directory: packages/agentcue
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+          if [ -z "${NPM_CONFIG_TOKEN:-}" ]; then
             echo "::error::Missing NPM_TOKEN secret. Add NPM_TOKEN in Repository Settings -> Secrets and variables -> Actions."
             exit 1
           fi
-          npm publish --access public
+          bun publish --access public
 
       - name: Create Git Tag and GitHub Release
         if: steps.version.outputs.skip != 'true'

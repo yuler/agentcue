@@ -20,22 +20,26 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-
-      - name: Setup mise & Bun
-        uses: jdx/mise-action@v2
+          bun-version: latest
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build and run test suite
-        run: mise run check
+      # Mirrors `mise run check` (build + test) without installing mise/Node.
+      - name: Build all targets
+        run: |
+          (cd packages/agentcue && bun scripts/build.mjs)
+          (cd apps/web && bun scripts/build.mjs)
+          (cd examples/vite-react && bunx tsc --noEmit && bunx vite build)
+
+      - name: Run test suite
+        run: (cd packages/agentcue && bun test)
 
       - name: Verify package tarball
         working-directory: packages/agentcue
-        run: npm pack --dry-run
+        run: bun pm pack --dry-run
