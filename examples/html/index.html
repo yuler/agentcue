@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>agentcue Playground</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #2563eb;
+        --border: #e2e8f0;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      .container { max-width: 920px; margin: 0 auto; padding: 28px 24px 96px; }
+      .nav {
+        display: flex; align-items: center; justify-content: space-between;
+        padding-bottom: 24px; border-bottom: 1px solid var(--border);
+      }
+      .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; }
+      .nav-links { display: flex; gap: 20px; align-items: center; }
+      .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; }
+      .hero { padding: 56px 0 42px; text-align: left; }
+      .badge {
+        display: inline-block; padding: 4px 10px; border-radius: 999px;
+        background: #dbeafe; color: #1d4ed8; font-size: 12px; font-weight: 600;
+        margin-bottom: 14px;
+      }
+      .hero h1 {
+        font-size: 40px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.03em;
+      }
+      .hero p { font-size: 17px; color: var(--muted); max-width: 600px; margin: 0 0 26px; }
+      .hero-actions { display: flex; gap: 12px; }
+      .btn-primary {
+        background: var(--accent); color: #fff; border: none; border-radius: 8px;
+        padding: 11px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+      }
+      .btn-secondary {
+        background: var(--surface); color: var(--text); border: 1px solid var(--border);
+        border-radius: 8px; padding: 11px 20px; font-size: 14px; font-weight: 500; cursor: pointer;
+      }
+      .grid {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px;
+      }
+      .card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 12px; padding: 20px;
+      }
+      .card h3 { margin: 0 0 6px; font-size: 16px; }
+      .card p { margin: 0; font-size: 13.5px; color: var(--muted); }
+      .metric { font-size: 28px; font-weight: 700; margin-top: 12px; color: var(--text); }
+    </style>
+  </head>
+  <body data-source="examples/html/index.html">
+    <div class="container">
+      <header class="nav" id="top-nav">
+        <div class="brand">Acme Studio</div>
+        <nav class="nav-links">
+          <a href="#features">Features</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#docs">Docs</a>
+        </nav>
+      </header>
+
+      <section class="hero" id="hero-section">
+        <span class="badge" id="hero-badge">Beta v0.0.1 Playground</span>
+        <h1 id="hero-title">Point at any UI element and cue your coding agent.</h1>
+        <p id="hero-subtitle">
+          Press <strong>Cmd/Ctrl + Shift + F</strong> (or click the <strong>✦</strong> icon in the bottom-right corner)
+          to activate, click two or three elements on this page, add short notes, and press
+          <strong>S</strong> (or <strong>Cmd/Ctrl + Enter</strong>). Your selected Agent CLI will edit
+          <code>examples/html/index.html</code> and this page will auto-reload!
+        </p>
+        <div class="hero-actions">
+          <button class="btn-primary" id="primary-cta" onclick="alert('Normal click! Activate agentcue (Cmd/Ctrl+Shift+F) to annotate instead.')">
+            Start Free Trial
+          </button>
+          <button class="btn-secondary" id="secondary-cta">Book a Demo</button>
+        </div>
+      </section>
+
+      <section class="grid" id="metrics-grid">
+        <article class="card" data-testid="card-latency">
+          <h3>Dispatch Speed</h3>
+          <p>Zero copy-paste switching between browser and terminal.</p>
+          <div class="metric">120ms</div>
+        </article>
+        <article class="card" data-testid="card-agents">
+          <h3>Connected Agents</h3>
+          <p>Switch seamlessly between agy, claude, cursor-agent, codex, and pi.</p>
+          <div class="metric">5 CLIs</div>
+        </article>
+        <article class="card" data-testid="card-bundle">
+          <h3>Overlay Footprint</h3>
+          <p>Framework-agnostic Shadow DOM script with zero CSS leaks.</p>
+          <div class="metric">&lt; 15 KB</div>
+        </article>
+      </section>
+    </div>
+  </body>
+</html>

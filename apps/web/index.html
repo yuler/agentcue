@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>agentcue — Push visual UI Cues straight to your Agent CLI</title>
+    <meta
+      name="description"
+      content="Pick DOM nodes in the browser and push structured UI edit Cues straight to your local Agent CLI (agy, claude, cursor-agent, codex, pi)."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script>
+      (() => {
+        try {
+          const saved = localStorage.getItem("agentcue:theme");
+          const dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+        } catch {}
+      })();
+      window.__AGENTCUE_ORIGIN__ = "http://agentcue.local.sim";
+    </script>
+  </head>
+  <body>
+    <div class="page">
+      <!-- Header -->
+      <header class="top-header">
+        <div class="brand">
+          <span class="logo-mark">✦</span>
+          <span class="brand-name">agentcue</span>
+        </div>
+        <div class="header-right">
+          <div class="lang-toggle">
+            <button type="button" class="lang-btn active" data-lang="en">EN</button>
+            <button type="button" class="lang-btn" data-lang="zh">中文</button>
+          </div>
+          <button
+            type="button"
+            class="theme-btn"
+            id="theme-toggle"
+            aria-label="Switch to dark theme"
+            title="Switch to dark theme"
+          >
+            <svg
+              class="icon-sun"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+            </svg>
+            <svg
+              class="icon-moon"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+            </svg>
+          </button>
+          <span class="version-badge">v0.0.1 · MIT</span>
+        </div>
+      </header>
+
+      <!-- Hero -->
+      <section class="hero">
+        <h1
+          data-en="Point at any element. Cue your Agent CLI immediately."
+          data-zh="指向任意元素，立即发送指令到 Agent CLI。"
+        >Point at any element. Cue your Agent CLI immediately.</h1>
+        <p class="subtitle"
+          data-en="Terminal coding agents can't see your rendered page. agentcue pushes structured visual Pins straight into agy, claude, cursor-agent, codex, or pi — your code updates and HMR reloads on the spot."
+          data-zh="终端编码 Agent 无法看到你渲染的页面。agentcue 将结构化的视觉 Pin 直接推送到 agy、claude、cursor-agent、codex 或 pi，代码即时更新并 HMR 热重载。"
+        >Terminal coding agents can't see your rendered page. agentcue pushes structured visual Pins straight into agy, claude, cursor-agent, codex, or pi — your code updates and HMR reloads on the spot.</p>
+
+        <!-- Quickstart Tabs -->
+        <div class="quickstart">
+          <div class="qs-tabs">
+            <button type="button" class="qs-tab active" data-tab="qs-vite"
+              data-en="Vite Plugin" data-zh="Vite 插件">Vite Plugin</button>
+            <button type="button" class="qs-tab" data-tab="qs-cli"
+              data-en="Standalone CLI" data-zh="独立 CLI">Standalone CLI</button>
+          </div>
+          <div class="qs-panel active" id="qs-vite">
+            <div class="code-block">
+              <code>import agentcue from "agentcue/vite"</code>
+              <button type="button" class="copy-btn" data-copy='import agentcue from "agentcue/vite"'>
+                <span class="copy-status">Copy</span>
+              </button>
+            </div>
+          </div>
+          <div class="qs-panel" id="qs-cli">
+            <div class="code-block">
+              <code>npx agentcue agy</code>
+              <button type="button" class="copy-btn" data-copy="npx agentcue agy">
+                <span class="copy-status">Copy</span>
+              </button>
+            </div>
+            <div class="code-block">
+              <code>&lt;script src="http://localhost:4318/client.js"&gt;&lt;/script&gt;</code>
+              <button type="button" class="copy-btn" data-copy='<script src="http://localhost:4318/client.js"></script>'>
+                <span class="copy-status">Copy</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Interactive Live Sandbox -->
+      <section class="sandbox-section">
+        <h2
+          data-en="Try it right here"
+          data-zh="在此页面试用"
+        >Try it right here</h2>
+        <p class="section-desc"
+          data-en-html='The real <code>&amp;lt;agentcue-root&amp;gt;</code> toolbar is active in the bottom-right corner. Click the <code>✦</code> launcher (or press <code>Cmd/Ctrl + Shift + F</code>) to enter Pick Mode, click any element below, type a note, and press <code>Cmd/Ctrl + Enter</code> to send.'
+          data-zh-html='真正的 <code>&amp;lt;agentcue-root&amp;gt;</code> 工具栏已在右下角激活。点击 <code>✦</code> 启动器（或按 <code>Cmd/Ctrl + Shift + F</code>）进入 Pick 模式，点击下方任意元素，输入备注，然后按 <code>Cmd/Ctrl + Enter</code> 发送。'
+        >The real <code>&lt;agentcue-root&gt;</code> toolbar is active in the bottom-right corner. Click the <code>✦</code> launcher (or press <code>Cmd/Ctrl + Shift + F</code>) to enter Pick Mode, click any element below, type a note, and press <code>Cmd/Ctrl + Enter</code> to send.</p>
+
+        <div class="sandbox-card">
+          <div class="sandbox-actions">
+            <button type="button" class="demo-btn accent" id="try-pick-toggle"
+              data-en="✦ Activate Pick Mode" data-zh="✦ 激活 Pick 模式"
+            >✦ Activate Pick Mode</button>
+            <button type="button" class="demo-btn" id="sandbox-primary-btn"
+              data-source="apps/web/index.html"
+              data-en="Primary Action" data-zh="主要操作"
+            >Primary Action</button>
+            <button type="button" class="demo-btn secondary" id="sandbox-secondary-btn"
+              data-source="apps/web/index.html"
+              data-en="Secondary Pill" data-zh="次要按钮"
+            >Secondary Pill</button>
+            <button type="button" class="demo-btn outline" id="sandbox-reset-btn"
+              data-en="Reset" data-zh="重置"
+            >Reset</button>
+          </div>
+
+          <div class="demo-feature-box" id="sandbox-card-target"
+            data-source="apps/web/index.html">
+            <h3
+              data-en="Interactive Sandbox Card"
+              data-zh="交互式沙盒卡片"
+            >Interactive Sandbox Card</h3>
+            <p
+              data-en="Pick this card, type a style instruction (e.g. &quot;make background green&quot; or &quot;变成翡翠绿胶囊按钮&quot;), and dispatch a Cue to see both the live visual edit and the exact prompt below."
+              data-zh="选取此卡片，输入样式指令（例如 &quot;make background green&quot; 或 &quot;变成翡翠绿胶囊按钮&quot;），发送 Cue 即可看到实时样式变化和下方的完整提示词。"
+            >Pick this card, type a style instruction (e.g. "make background green" or "变成翡翠绿胶囊按钮"), and dispatch a Cue to see both the live visual edit and the exact prompt below.</p>
+          </div>
+
+          <div class="terminal-window">
+            <div class="terminal-header">
+              <div class="terminal-dots" aria-hidden="true">
+                <span class="terminal-dot red"></span>
+                <span class="terminal-dot yellow"></span>
+                <span class="terminal-dot green"></span>
+              </div>
+              <div class="terminal-title" id="terminal-title">zsh — ~/projects/my-web-app</div>
+              <div class="terminal-status" id="terminal-status" data-state="idle">
+                <span class="terminal-status-dot"></span>
+                <span id="terminal-status-text" data-en="READY :4318" data-zh="就绪 :4318">READY :4318</span>
+              </div>
+            </div>
+            <div class="live-cue-log" id="live-cue-log"><span class="term-line"><span class="term-prompt">~/projects/my-web-app $</span> <span class="term-cmd">npx agentcue agy</span></span>
+<span class="term-line"><span class="term-brand">✦ agentcue</span> bridge listening on <span class="term-bold">http://127.0.0.1:4318</span></span>
+<span class="term-line"><span class="term-dim">  Workspace :</span> ~/projects/my-web-app</span>
+<span class="term-line"><span class="term-dim">  Agents    :</span> <span class="term-ok">✓ agy</span>  <span class="term-ok">✓ claude</span>  <span class="term-ok">✓ cursor-agent</span>  <span class="term-ok">✓ codex</span>  <span class="term-ok">✓ pi</span></span>
+
+<span class="term-line term-comment" data-en="# Waiting for your first Cue…" data-zh="# 等待你的第一个 Cue…"># Waiting for your first Cue…</span>
+<span class="term-line"><span class="term-comment" data-en="# Press Cmd/Ctrl + Shift + F, click an element, add a note, and hit Cmd/Ctrl + Enter." data-zh="# 按 Cmd/Ctrl + Shift + F，点击元素，输入备注，然后按 Cmd/Ctrl + Enter 发送。"># Press Cmd/Ctrl + Shift + F, click an element, add a note, and hit Cmd/Ctrl + Enter.</span><span class="term-cursor" aria-hidden="true"></span></span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How It Works -->
+      <section>
+        <h2
+          data-en="How it works"
+          data-zh="工作原理"
+        >How it works</h2>
+        <ol class="steps">
+          <li
+            data-en-html='<strong>Activate</strong> — Press <code>Cmd/Ctrl + Shift + F</code> (or click the <code>✦</code> launcher) to open the toolbar and enter Pick Mode.'
+            data-zh-html='<strong>激活</strong> — 按 <code>Cmd/Ctrl + Shift + F</code>（或点击 <code>✦</code> 启动器）打开工具栏并进入 Pick 模式。'
+          ><strong>Activate</strong> — Press <code>Cmd/Ctrl + Shift + F</code> (or click the <code>✦</code> launcher) to open the toolbar and enter Pick Mode.</li>
+          <li
+            data-en-html='<strong>Pick &amp;amp; annotate</strong> — Click elements to drop numbered Pins. Type a change note for each, press <code>Enter</code> to save and pick more.'
+            data-zh-html='<strong>选取并标注</strong> — 点击元素放置编号 Pin，为每个 Pin 输入修改说明，按 <code>Enter</code> 保存并继续选取。'
+          ><strong>Pick &amp; annotate</strong> — Click elements to drop numbered Pins. Type a change note for each, press <code>Enter</code> to save and pick more.</li>
+          <li
+            data-en-html='<strong>Push Cue</strong> — Press <code>S</code> or <code>Cmd/Ctrl + Enter</code> to send all Pins as a structured Cue to your Agent CLI. Code edits and HMR reload automatically.'
+            data-zh-html='<strong>发送 Cue</strong> — 按 <code>S</code> 或 <code>Cmd/Ctrl + Enter</code> 将所有 Pin 作为结构化 Cue 发送到 Agent CLI，代码自动修改并 HMR 热重载。'
+          ><strong>Push Cue</strong> — Press <code>S</code> or <code>Cmd/Ctrl + Enter</code> to send all Pins as a structured Cue to your Agent CLI. Code edits and HMR reload automatically.</li>
+        </ol>
+      </section>
+
+      <!-- Keyboard Shortcuts -->
+      <section>
+        <h2
+          data-en="Keyboard shortcuts"
+          data-zh="键盘快捷键"
+        >Keyboard shortcuts</h2>
+        <table class="shortcut-table">
+          <thead>
+            <tr>
+              <th data-en="Shortcut" data-zh="快捷键">Shortcut</th>
+              <th data-en="Action" data-zh="操作">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Cmd/Ctrl + Shift + F</code></td>
+              <td data-en="Activate / collapse toolbar + toggle Pick Mode" data-zh="激活/折叠工具栏并切换 Pick 模式">Activate / collapse toolbar + toggle Pick Mode</td></tr>
+            <tr><td><code>Enter</code></td>
+              <td data-en="Save current Pin, stay in Pick Mode" data-zh="保存当前 Pin，保持 Pick 模式">Save current Pin, stay in Pick Mode</td></tr>
+            <tr><td><code>S</code> / <code>Cmd/Ctrl + Enter</code></td>
+              <td data-en="Send all Pins as a Cue" data-zh="将所有 Pin 作为 Cue 发送">Send all Pins as a Cue</td></tr>
+            <tr><td><code>P</code></td>
+              <td data-en="Pause / resume Pick Mode" data-zh="暂停/恢复 Pick 模式">Pause / resume Pick Mode</td></tr>
+            <tr><td><code>A</code> / <code>1-5</code></td>
+              <td data-en="Switch Agent Target" data-zh="切换 Agent 目标">Switch Agent Target</td></tr>
+            <tr><td><code>R</code></td>
+              <td data-en="Reset current Agent session" data-zh="重置当前 Agent 会话">Reset current Agent session</td></tr>
+            <tr><td><code>C</code></td>
+              <td data-en="Copy Cue as Markdown" data-zh="复制 Cue 为 Markdown">Copy Cue as Markdown</td></tr>
+            <tr><td><code>X</code></td>
+              <td data-en="Clear all Pins" data-zh="清除所有 Pin">Clear all Pins</td></tr>
+            <tr><td><code>H</code></td>
+              <td data-en="Hide / show Pins" data-zh="隐藏/显示 Pin">Hide / show Pins</td></tr>
+            <tr><td><code>Esc</code></td>
+              <td data-en="Close popover or collapse toolbar" data-zh="关闭弹出框或折叠工具栏">Close popover or collapse toolbar</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Supported Agent Targets -->
+      <section>
+        <h2
+          data-en="Supported Agent Targets"
+          data-zh="支持的 Agent 目标"
+        >Supported Agent Targets</h2>
+        <table class="agent-table">
+          <thead>
+            <tr>
+              <th data-en="Agent Target" data-zh="Agent 目标">Agent Target</th>
+              <th data-en="CLI" data-zh="CLI 命令">CLI</th>
+              <th data-en="Auto-approve invocation" data-zh="自动批准调用方式">Auto-approve invocation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Antigravity</td>
+              <td><code>agy</code></td>
+              <td><code>agy --dangerously-skip-permissions -p &lt;cue&gt;</code></td>
+            </tr>
+            <tr>
+              <td>Claude Code</td>
+              <td><code>claude</code></td>
+              <td><code>claude --dangerously-skip-permissions -p &lt;cue&gt;</code></td>
+            </tr>
+            <tr>
+              <td>Cursor Agent</td>
+              <td><code>cursor-agent</code></td>
+              <td><code>cursor-agent --yolo -p &lt;cue&gt;</code></td>
+            </tr>
+            <tr>
+              <td>OpenAI Codex</td>
+              <td><code>codex</code></td>
+              <td><code>codex exec --dangerously-bypass-approvals-and-sandbox &lt;cue&gt;</code></td>
+            </tr>
+            <tr>
+              <td>Pi</td>
+              <td><code>pi</code></td>
+              <td><code>pi --approve -p -- &lt;cue&gt;</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <span>agentcue — Push, not Pull.</span>
+        <span
+          data-en="Framework-agnostic Shadow DOM · Zero lock-in"
+          data-zh="框架无关 Shadow DOM · 零锁定"
+        >Framework-agnostic Shadow DOM · Zero lock-in</span>
+      </footer>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+    <script src="./client.js" defer></script>
+  </body>
+</html>

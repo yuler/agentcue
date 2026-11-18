@@ -1,0 +1,7 @@
+{
+  "name": "@agentcue/example-html",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Plain HTML playground example for agentcue."
+}

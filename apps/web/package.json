@@ -1,0 +1,7 @@
+{
+  "name": "@agentcue/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Official website and interactive showcase for agentcue."
+}

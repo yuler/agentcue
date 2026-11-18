@@ -1,0 +1,110 @@
+[tools]
+bun = "latest"
+
+# ─── Workspace (Aggregate) ───────────────────────────────────────────────────
+
+[tasks.setup]
+description = "Install workspace dependencies and build all targets"
+run = ["bun install", "mise run build"]
+
+[tasks.install]
+description = "Install and link workspace dependencies"
+run = "bun install"
+
+[tasks.dev]
+description = "Start all dev servers (agentcue, web, and all examples)"
+depends = [
+  "agentcue:dev",
+  "web:dev",
+  "example:html:dev",
+  "example:vite-react:dev",
+]
+
+[tasks.build]
+description = "Build all packages, apps, and examples"
+depends = [
+  "agentcue:build",
+  "web:build",
+  "example:vite-react:build",
+]
+
+[tasks.test]
+description = "Run workspace test suite"
+depends = ["agentcue:test"]
+
+[tasks.check]
+description = "Build all targets and run test suite"
+depends = ["build", "test"]
+
+[tasks.clean]
+description = "Remove build artifacts across workspaces"
+run = "rm -rf packages/*/dist apps/*/dist examples/*/dist"
+
+# ─── Package: agentcue ───────────────────────────────────────────────────────
+
+[tasks."agentcue:build"]
+description = "Build agentcue CLI, library, Vite plugin, and browser overlay bundles"
+dir = "packages/agentcue"
+run = "node scripts/build.mjs"
+
+[tasks."agentcue:dev"]
+description = "Watch and rebuild agentcue bundles on source changes"
+depends = ["agentcue:build"]
+dir = "packages/agentcue"
+run = "node scripts/build.mjs --watch --no-initial"
+
+[tasks."agentcue:start"]
+description = "Start compiled agentcue CLI (:4318)"
+depends = ["agentcue:build"]
+run = "node packages/agentcue/dist/cli.js"
+
+[tasks."agentcue:test"]
+description = "Run agentcue unit and server integration tests"
+depends = ["agentcue:build"]
+run = "bun test"
+
+# ─── App: web ────────────────────────────────────────────────────────────────
+
+[tasks."web:build"]
+description = "Build @agentcue/web showcase"
+depends = ["agentcue:build"]
+dir = "apps/web"
+run = "node scripts/build.mjs"
+
+[tasks."web:dev"]
+description = "Start @agentcue/web showcase in dev mode (:4319)"
+depends = ["web:build"]
+dir = "apps/web"
+run = "node scripts/serve.mjs --watch"
+
+[tasks."web:start"]
+description = "Serve built @agentcue/web showcase (:4319)"
+depends = ["web:build"]
+dir = "apps/web"
+run = "node scripts/serve.mjs"
+
+# ─── Examples ────────────────────────────────────────────────────────────────
+
+[tasks."example:dev"]
+description = "Start all playground examples in dev mode"
+depends = [
+  "example:html:dev",
+  "example:vite-react:dev",
+]
+
+[tasks."example:html:dev"]
+description = "Start plain HTML playground example (:4318)"
+depends = ["agentcue:build"]
+run = "bun --watch packages/agentcue/src/cli.ts"
+
+[tasks."example:vite-react:dev"]
+description = "Start Vite + React playground example (:5173)"
+depends = ["agentcue:build"]
+dir = "examples/vite-react"
+run = "bunx vite"
+
+[tasks."example:vite-react:build"]
+description = "Typecheck and build Vite + React playground example"
+depends = ["agentcue:build"]
+dir = "examples/vite-react"
+run = "bunx tsc --noEmit && bunx vite build"
