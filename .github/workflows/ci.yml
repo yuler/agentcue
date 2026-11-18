@@ -21,21 +21,88 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          fetch-depth: ${{ github.event_name == 'push' && 0 || 1 }}
 
-      - name: Setup mise & Bun
-        uses: jdx/mise-action@v2
+      - name: Detect changed scopes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            agentcue:
+              - 'packages/agentcue/**'
+              - 'examples/html/index.html'
+              - 'README.md'
+              - 'LICENSE'
+              - 'logo.svg'
+              - 'package.json'
+              - 'bun.lock'
+              - 'tsconfig.base.json'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
+            web:
+              - 'apps/web/**'
+              - 'packages/agentcue/src/client/**'
+              - 'packages/agentcue/src/shared/**'
+              - 'packages/agentcue/scripts/build.mjs'
+              - 'packages/agentcue/package.json'
+              - 'logo.svg'
+              - 'package.json'
+              - 'bun.lock'
+              - 'tsconfig.base.json'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
+            example_vite_react:
+              - 'examples/vite-react/**'
+              - 'packages/agentcue/src/index.ts'
+              - 'packages/agentcue/src/vite.ts'
+              - 'packages/agentcue/src/server/**'
+              - 'packages/agentcue/src/shared/**'
+              - 'packages/agentcue/src/client/**'
+              - 'packages/agentcue/scripts/build.mjs'
+              - 'packages/agentcue/package.json'
+              - 'packages/agentcue/tsconfig*.json'
+              - 'package.json'
+              - 'bun.lock'
+              - 'tsconfig.base.json'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Setup toolchain
+        if: >-
+          steps.changes.outputs.agentcue == 'true' ||
+          steps.changes.outputs.web == 'true' ||
+          steps.changes.outputs.example_vite_react == 'true'
+        uses: ./.github/actions/setup
+        with:
+          install: >-
+            ${{
+              steps.changes.outputs.agentcue == 'true' ||
+              steps.changes.outputs.example_vite_react == 'true'
+            }}
 
-      - name: Build and run test suite
-        run: mise run check
+      - name: Build and test affected targets
+        if: >-
+          steps.changes.outputs.agentcue == 'true' ||
+          steps.changes.outputs.web == 'true' ||
+          steps.changes.outputs.example_vite_react == 'true'
+        run: |
+          tasks=()
+          [ "${{ steps.changes.outputs.agentcue }}" = "true" ] && tasks+=(agentcue:test)
+          [ "${{ steps.changes.outputs.web }}" = "true" ] && tasks+=(web:build)
+          [ "${{ steps.changes.outputs.example_vite_react }}" = "true" ] && tasks+=(example:vite-react:build)
+
+          args=()
+          for t in "${tasks[@]}"; do
+            [ ${#args[@]} -gt 0 ] && args+=(:::)
+            args+=("$t")
+          done
+          mise run "${args[@]}"
 
       - name: Verify package tarball
+        if: steps.changes.outputs.agentcue == 'true'
         working-directory: packages/agentcue
         run: npm pack --dry-run

@@ -4,6 +4,19 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "apps/web/**"
+      - "packages/agentcue/src/client/**"
+      - "packages/agentcue/src/shared/**"
+      - "packages/agentcue/scripts/build.mjs"
+      - "packages/agentcue/package.json"
+      - "logo.svg"
+      - "package.json"
+      - "bun.lock"
+      - "mise.toml"
+      - "tsconfig.base.json"
+      - ".github/workflows/deploy.yml"
+      - ".github/actions/**"
   workflow_dispatch:
 
 permissions:
@@ -27,16 +40,10 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
         with:
-          node-version: 22
-
-      - name: Setup mise & Bun
-        uses: jdx/mise-action@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+          install: "false"
 
       - name: Build @agentcue/web
         run: mise run web:build
