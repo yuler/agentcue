@@ -50,18 +50,18 @@ run = "node scripts/build.mjs --client-only"
 [tasks."agentcue:build"]
 description = "Build agentcue CLI, library, Vite plugin, and browser overlay bundles"
 dir = "packages/agentcue"
-run = "node scripts/build.mjs"
+run = "bun scripts/build.mjs"
 
 [tasks."agentcue:dev"]
 description = "Watch and rebuild agentcue bundles on source changes"
 depends = ["agentcue:build"]
 dir = "packages/agentcue"
-run = "node scripts/build.mjs --watch --no-initial"
+run = "bun scripts/build.mjs --watch --no-initial"
 
 [tasks."agentcue:start"]
 description = "Start compiled agentcue CLI (:4318)"
 depends = ["agentcue:build"]
-run = "node packages/agentcue/dist/cli.js"
+run = "bun packages/agentcue/dist/cli.js"
 
 [tasks."agentcue:test"]
 description = "Run agentcue unit and server integration tests"
@@ -74,19 +74,19 @@ run = "bun test"
 description = "Build @agentcue/web showcase"
 depends = ["agentcue:build:client"]
 dir = "apps/web"
-run = "node scripts/build.mjs"
+run = "bun scripts/build.mjs"
 
 [tasks."web:dev"]
 description = "Start @agentcue/web showcase in dev mode (:4319)"
 depends = ["web:build"]
 dir = "apps/web"
-run = "node scripts/serve.mjs --watch"
+run = "bun scripts/serve.mjs --watch"
 
 [tasks."web:start"]
 description = "Serve built @agentcue/web showcase (:4319)"
 depends = ["web:build"]
 dir = "apps/web"
-run = "node scripts/serve.mjs"
+run = "bun scripts/serve.mjs"
 
 # ─── Examples ────────────────────────────────────────────────────────────────
 

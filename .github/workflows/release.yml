@@ -40,7 +40,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
@@ -65,13 +65,13 @@ jobs:
         if: steps.version.outputs.skip != 'true'
         working-directory: packages/agentcue
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+          if [ -z "${NPM_CONFIG_TOKEN:-}" ]; then
             echo "::error::Missing NPM_TOKEN secret. Add NPM_TOKEN in Repository Settings -> Secrets and variables -> Actions."
             exit 1
           fi
-          npm publish --access public
+          bun publish --access public
 
       - name: Create Git Tag and GitHub Release
         if: steps.version.outputs.skip != 'true'

@@ -185,14 +185,20 @@ for (const t of gitTags) {
   }
 }
 
-const pkgSemver = parseSemver(pkg.version) || [0, 0, 1];
+// package.json version is a repo placeholder (0.0.0). Real version is
+// derived from npm + git tags in CI and stamped only for publish.
+const pkgSemver = parseSemver(pkg.version);
+const placeholder =
+  !pkgSemver || (pkgSemver[0] === 0 && pkgSemver[1] === 0 && pkgSemver[2] === 0);
 let targetSemver;
 if (!highestReleased) {
   const initialFloor = [0, 0, 1];
-  targetSemver = cmpSemver(pkgSemver, initialFloor) > 0 ? pkgSemver : initialFloor;
+  targetSemver =
+    !placeholder && cmpSemver(pkgSemver, initialFloor) > 0 ? pkgSemver : initialFloor;
 } else {
   const bumped = bumpSemver(highestReleased, bump);
-  targetSemver = cmpSemver(pkgSemver, bumped) > 0 ? pkgSemver : bumped;
+  targetSemver =
+    !placeholder && cmpSemver(pkgSemver, bumped) > 0 ? pkgSemver : bumped;
 }
 
 const nextVersion = fmtSemver(targetSemver);

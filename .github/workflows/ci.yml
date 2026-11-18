@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +21,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: ${{ github.event_name == 'push' && 0 || 1 }}
 
@@ -105,4 +106,4 @@ jobs:
       - name: Verify package tarball
         if: steps.changes.outputs.agentcue == 'true'
         working-directory: packages/agentcue
-        run: npm pack --dry-run
+        run: bun pm pack --dry-run
