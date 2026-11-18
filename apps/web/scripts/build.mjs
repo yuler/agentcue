@@ -8,10 +8,11 @@ const distDir = join(webRoot, "dist");
 const zhDir = join(distDir, "zh");
 mkdirSync(zhDir, { recursive: true });
 
-// Copy index.html, styles.css, and logo.svg
+// Copy index.html, styles.css, logo.svg, and CNAME
 copyFileSync(join(webRoot, "index.html"), join(distDir, "index.html"));
 copyFileSync(join(webRoot, "src/styles.css"), join(distDir, "styles.css"));
 copyFileSync(join(webRoot, "../../logo.svg"), join(distDir, "logo.svg"));
+writeFileSync(join(distDir, "CNAME"), "agentcue.yuler.dev\n", "utf-8");
 
 // Copy real compiled client.js from packages/agentcue/dist
 const clientSrc = join(webRoot, "../../packages/agentcue/dist/client.js");

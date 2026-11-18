@@ -2,6 +2,8 @@
 
 **Cue the Agent.** Pick one or more DOM elements in the browser, jot down quick UI edits, and push the batch straight to your local Agent CLI (`agy`, `claude`, `cursor-agent`, `codex`, `pi`) so it edits your code immediately.
 
+**[Live Website & Interactive Sandbox (agentcue.yuler.dev)](https://agentcue.yuler.dev)** · **[中文文档](https://agentcue.yuler.dev/zh/)** · **[GitHub Repository](https://github.com/yuler/agentcue)**
+
 ## Why
 
 Terminal coding agents cannot see your rendered page. Explaining visual tweaks in prose ("move the second button on the left 8px right and match the header font size") is slow and imprecise.
@@ -42,14 +44,14 @@ export default defineConfig({
 
 ### Standalone CLI (Any Framework or Plain HTML)
 
-Start the local bridge in any frontend project (Next.js, React, Vue, Svelte, Astro, Rails, or plain HTML) with zero build setup:
+Start the local bridge in any frontend project (Next.js, React, Vue, Svelte, Astro, Rails, or plain HTML) with zero build setup. It automatically detects all installed Agent CLIs (`agy`, `claude`, `cursor-agent`, `codex`, `pi`) so you can switch targets freely in the browser:
 
 ```bash
 # Start local bridge in current workspace (default port: 4318)
 npx agentcue
 
-# Or pass default Agent Target, port, and workspace directory
-npx agentcue agy --port 4318 --cwd /path/to/your-frontend
+# Or customize port and target workspace directory
+npx agentcue --port 4318 --cwd /path/to/your-frontend
 ```
 
 Then attach the overlay in the browser using any output printed in your terminal:

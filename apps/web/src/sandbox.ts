@@ -83,7 +83,7 @@ function renderIdleTerminal() {
   const line2Zh =
     "# 按 Cmd/Ctrl + Shift + F，点击元素，输入备注，然后按 Cmd/Ctrl + Enter 发送。";
 
-  logEl.innerHTML = `<span class="term-line"><span class="term-prompt">~/projects/my-web-app $</span> <span class="term-cmd">npx agentcue agy</span></span>
+  logEl.innerHTML = `<span class="term-line"><span class="term-prompt">~/projects/my-web-app $</span> <span class="term-cmd">npx agentcue</span></span>
 <span class="term-line"><span class="term-brand">✦ agentcue</span> bridge listening on <span class="term-bold">http://127.0.0.1:4318</span></span>
 <span class="term-line"><span class="term-dim">  Workspace :</span> ~/projects/my-web-app</span>
 <span class="term-line"><span class="term-dim">  Agents    :</span> <span class="term-ok">✓ agy</span>  <span class="term-ok">✓ claude</span>  <span class="term-ok">✓ cursor-agent</span>  <span class="term-ok">✓ codex</span>  <span class="term-ok">✓ pi</span></span>

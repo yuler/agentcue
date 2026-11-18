@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "Pick DOM nodes in the browser and push structured UI edit Cues straight to your local Agent CLI (agy, claude, cursor-agent, codex, pi).",
   "license": "MIT",
+  "homepage": "https://agentcue.yuler.dev",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yuler/agentcue.git",
