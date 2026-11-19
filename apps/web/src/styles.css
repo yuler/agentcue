@@ -19,6 +19,10 @@
   --code-color: #1f2937;
   --accent: #2563eb;
   --accent-soft: rgba(37, 99, 235, 0.1);
+  --logo-bg: #ffffff;
+  --logo-border: rgba(17, 17, 16, 0.12);
+  --logo-signal: #2563eb;
+  --logo-pointer: #111110;
 }
 
 :root[data-theme="dark"] {
@@ -40,6 +44,10 @@
   --code-color: #e5e7eb;
   --accent: #3b82f6;
   --accent-soft: rgba(59, 130, 246, 0.16);
+  --logo-bg: #111113;
+  --logo-border: rgba(255, 255, 255, 0.12);
+  --logo-signal: #3b82f6;
+  --logo-pointer: #f4f4f2;
 }
 
 *, *::before, *::after {
@@ -109,6 +117,23 @@ code {
   border-radius: 6px;
   display: block;
   flex-shrink: 0;
+}
+
+.logo-mark .logo-bg {
+  fill: var(--logo-bg);
+}
+
+.logo-mark .logo-border {
+  stroke: var(--logo-border);
+}
+
+.logo-mark .logo-signal {
+  stroke: var(--logo-signal);
+}
+
+.logo-mark .logo-pointer {
+  fill: var(--logo-pointer);
+  stroke: var(--logo-pointer);
 }
 
 .brand-name {
