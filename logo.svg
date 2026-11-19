@@ -1,18 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#111113" />
-  <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" stroke="#ffffff" stroke-opacity="0.12" />
-  <g transform="translate(4 4)">
-    <path
-      d="M19 9.5V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h2.5"
-      stroke="#3b82f6"
-      stroke-width="2.25"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <circle cx="9.5" cy="9.5" r="1.75" fill="#3b82f6" />
-    <path
-      d="M15.5 10C16.15 14.05 16.95 14.85 21 15.5C16.95 16.15 16.15 16.95 15.5 21C14.85 16.95 14.05 16.15 10 15.5C14.05 14.85 14.85 14.05 15.5 10Z"
-      fill="#f8fafc"
-    />
-  </g>
+  <style>
+    .bg { fill: #ffffff; }
+    .border { stroke: #111110; stroke-opacity: 0.12; }
+    .signal { stroke: #2563eb; }
+    .pointer { fill: #111110; stroke: #111110; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #111113; }
+      .border { stroke: #ffffff; stroke-opacity: 0.12; }
+      .signal { stroke: #3b82f6; }
+      .pointer { fill: #f4f4f2; stroke: #f4f4f2; }
+    }
+  </style>
+  <rect class="bg" width="32" height="32" rx="8" fill="#ffffff" />
+  <rect class="border" x="0.5" y="0.5" width="31" height="31" rx="7.5" stroke="#111110" stroke-opacity="0.12" />
+  <path
+    class="signal"
+    d="M9.8 12.79A5 5 0 0 1 12.79 9.8M6.04 11.42A9 9 0 0 1 11.42 6.04"
+    stroke="#2563eb"
+    stroke-width="2.5"
+    stroke-linecap="round"
+  />
+  <path
+    class="pointer"
+    d="M14.5 14.5L26 18.8L20.9 20.9L18.8 26Z"
+    fill="#111110"
+    stroke="#111110"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+  />
 </svg>

@@ -1,4 +1,4 @@
-# <img src="./logo.svg" alt="" width="28" height="28" align="absmiddle" /> agentcue
+# <picture><source media="(prefers-color-scheme: dark)" srcset="./logo-dark.svg" /><img src="./logo.svg" alt="" width="28" height="28" align="absmiddle" /></picture> agentcue
 
 **Cue the Agent.** Pick one or more DOM elements in the browser, jot down quick UI edits, and push the batch straight to your local Agent CLI (`agy`, `claude`, `cursor-agent`, `codex`, `pi`) so it edits your code immediately.
 
