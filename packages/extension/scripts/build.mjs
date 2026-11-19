@@ -110,10 +110,30 @@ function isValidChromeManifestVersion(version) {
   return parts.some((n) => n > 0);
 }
 
+function readLatestGitTagVersion() {
+  try {
+    const out = execFileSync(
+      "git",
+      ["tag", "--list", "v*", "--sort=-v:refname"],
+      { cwd: repoRoot, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    const firstTag = out
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean);
+    if (!firstTag) return undefined;
+    const stripped = firstTag.replace(/^v/, "").split("-")[0];
+    return isValidChromeManifestVersion(stripped) ? stripped : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolveManifestVersion(coreVersion, fallbackVersion) {
   const candidates = [
     process.env.AGENTCUE_EXTENSION_VERSION,
     coreVersion,
+    readLatestGitTagVersion(),
     fallbackVersion,
     "0.0.1",
   ];
@@ -131,7 +151,7 @@ function buildAll({ skipTypes = false } = {}) {
   bundleEntry("src/background.ts", "background.js", "esm");
   bundleEntry("src/content.ts", "content.js", "iife");
   bundleEntry("src/page.ts", "page.js", "iife");
-  bundleEntry("src/options.ts", "options.js", "esm");
+  bundleEntry("src/popup.ts", "popup.js", "esm");
 
   if (!skipTypes) {
     const tscCandidates = [
@@ -161,7 +181,7 @@ function buildAll({ skipTypes = false } = {}) {
     "utf-8"
   );
 
-  copyFileSync(join(extRoot, "src/options.html"), join(distDir, "options.html"));
+  copyFileSync(join(extRoot, "src/popup.html"), join(distDir, "popup.html"));
 
   const iconFiles = readdirSync(join(extRoot, "icons")).filter((f) =>
     f.endsWith(".png")
@@ -178,8 +198,8 @@ function buildAll({ skipTypes = false } = {}) {
     "background.js",
     "content.js",
     "page.js",
-    "options.html",
-    "options.js",
+    "popup.html",
+    "popup.js",
     ...iconFiles.map((icon) => `icons/${icon}`),
   ];
 

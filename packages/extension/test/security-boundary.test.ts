@@ -27,29 +27,165 @@ const forgedCuePayload: CuePayload = {
   ],
 };
 
-describe("@agentcue/extension P1 security boundary", () => {
-  it("rejects forged page CustomEvents on localhost even when content.js is loaded with autoMountLocalhost=false", async () => {
+describe("@agentcue/extension P1 security boundary & UX lifecycle", () => {
+  it("shows floating bar by default, toggles floating bar live, syncs active icon, and fully unmounts on disable", async () => {
     const h = await createExtensionHarness({
-      tabUrl: "http://localhost:5173/dashboard",
-      autoMountLocalhost: false,
+      tabUrl: "https://github.com/yuler/agentcue",
     });
 
     try {
-      h.triggerContentLoad();
-      await new Promise((r) => setTimeout(r, 15));
+      // Simulate content_scripts load on normal page -> floating bar visible by default
+      await h.triggerContentLoad();
+      const host = h.doc.querySelector("agentcue-root");
+      assert.ok(host, "Expected isolated overlay host to be mounted on load");
+      const shadow = host.getInternalShadowForTest()!;
+      const launcherBtn = shadow.getElementById("launcherBtn")!;
+      assert.equal(
+        shadow.getElementById("toast"),
+        null,
+        "Standalone toast element should be removed"
+      );
+      assert.equal(
+        launcherBtn.classList.contains("hidden"),
+        false,
+        "Floating launcher bar should be visible by default"
+      );
 
-      // Overlay must not have mounted when autoMountLocalhost is disabled
-      assert.equal(h.doc.querySelector("agentcue-root"), null);
+      // Turn Show floating bar OFF -> launcher hides cleanly while idle
+      const hiddenBarState = (await h.updateSettingsFromPopup({
+        showFloatingBar: false,
+      })) as { showFloatingBar: boolean; enabled: boolean };
+      assert.equal(hiddenBarState.showFloatingBar, false);
+      assert.equal(launcherBtn.classList.contains("hidden"), true);
 
-      // Page tries the legacy P1 exploit: dispatching __agentcue_ext_to_bg__
+      // Activate Pick Mode via in-page Ctrl+Shift+F -> icon swaps to active (no PICK badge)
       h.win.dispatchEvent(
-        new CustomEvent("__agentcue_ext_to_bg__", {
-          detail: { type: "cue:send", reqId: "forged-1", payload: forgedCuePayload },
+        makeEvent("keydown", {
+          isTrusted: true,
+          ctrlKey: true,
+          shiftKey: true,
+          code: "KeyF",
+          key: "F",
+          path: [h.doc.body],
         })
       );
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise((r) => setTimeout(r, 15));
+      assert.equal(h.iconUpdates.at(-1)?.path["16"], "icons/icon-active-16.png");
+      assert.equal(
+        h.badgeUpdates.every((b) => b.text === ""),
+        true,
+        "Active state must use icon swap instead of PICK text badge"
+      );
 
-      assert.equal(h.postedCues.length, 0);
+      // Collapse in-page via × button -> launcher stays hidden (showFloatingBar=false) & icon resets
+      const collapseBtn = shadow.getElementById("collapseBtn")!;
+      collapseBtn.dispatchEvent(makeEvent("click", { isTrusted: true }));
+      await new Promise((r) => setTimeout(r, 15));
+      assert.equal(launcherBtn.classList.contains("hidden"), true);
+      assert.equal(h.iconUpdates.at(-1)?.path["16"], "icons/icon-16.png");
+
+      // Globally disable extension from Popup -> completely destroys overlay & shortcut listener
+      const disabledState = (await h.updateSettingsFromPopup({
+        enabled: false,
+      })) as { enabled: boolean; active: boolean };
+      assert.equal(disabledState.enabled, false);
+      assert.equal(disabledState.active, false);
+      assert.equal(h.doc.querySelector("agentcue-root"), null);
+      assert.equal(h.iconUpdates.at(-1)?.path["16"], "icons/icon-disabled-16.png");
+
+      // Ctrl+Shift+F while disabled must NOT be intercepted or mount overlay
+      const keyEvt = makeEvent("keydown", {
+        isTrusted: true,
+        ctrlKey: true,
+        shiftKey: true,
+        code: "KeyF",
+        key: "F",
+        path: [h.doc.body],
+      });
+      h.win.dispatchEvent(keyEvt);
+      assert.equal(keyEvt.defaultPrevented, false);
+      assert.equal(h.doc.querySelector("agentcue-root"), null);
+
+      // While disabled, Popup toggle must refuse to activate
+      const blockedToggle = (await h.toggleViaPopup()) as {
+        ok: boolean;
+        disabled?: boolean;
+      };
+      assert.equal(blockedToggle.ok, false);
+      assert.equal(blockedToggle.disabled, true);
+
+      // Re-enable extension -> restores normal icon & re-mounts overlay cleanly
+      const reenabledState = (await h.updateSettingsFromPopup({
+        enabled: true,
+        showFloatingBar: true,
+      })) as { enabled: boolean; showFloatingBar: boolean };
+      assert.equal(reenabledState.enabled, true);
+      assert.equal(reenabledState.showFloatingBar, true);
+      assert.ok(h.doc.querySelector("agentcue-root"));
+      assert.equal(h.iconUpdates.at(-1)?.path["16"], "icons/icon-16.png");
+    } finally {
+      h.cleanup();
+    }
+  });
+
+  it("auto-disables when page already embeds HTML/Vite agentcue SDK and leaves Ctrl+Shift+F untouched", async () => {
+    const h = await createExtensionHarness({
+      tabUrl: "http://localhost:5173/dashboard",
+    });
+
+    try {
+      // Simulate page embedding agentcue via agentcue/vite (script + open Shadow DOM)
+      const viteScript = h.doc.createElement("script");
+      viteScript.setAttribute("src", "/__agentcue/client.js");
+      h.doc.body.appendChild(viteScript);
+
+      const embeddedHost = h.doc.createElement("agentcue-root");
+      embeddedHost.setAttribute("data-agentcue-embedded", "true");
+      embeddedHost.attachShadow({ mode: "open" });
+      h.doc.documentElement.appendChild(embeddedHost);
+
+      // Content script runs on page -> detects Vite SDK, does NOT mount duplicate, dims icon
+      await h.triggerContentLoad();
+      assert.equal(h.doc.querySelectorAll("agentcue-root").length, 1);
+      assert.equal(h.iconUpdates.at(-1)?.path["16"], "icons/icon-disabled-16.png");
+
+      // Ctrl+Shift+F is NOT intercepted by the extension, so page SDK handles it natively
+      const keyEvt = makeEvent("keydown", {
+        isTrusted: true,
+        ctrlKey: true,
+        shiftKey: true,
+        code: "KeyF",
+        key: "F",
+        path: [h.doc.body],
+      });
+      h.win.dispatchEvent(keyEvt);
+      assert.equal(keyEvt.defaultPrevented, false);
+
+      const state = (await h.queryTabStateFromPopup()) as {
+        injectable: boolean;
+        active: boolean;
+        embedded: boolean;
+        embeddedSource?: string;
+        enabled: boolean;
+        showFloatingBar: boolean;
+      };
+      assert.deepEqual(state, {
+        injectable: true,
+        active: false,
+        embedded: true,
+        embeddedSource: "vite",
+        enabled: true,
+        showFloatingBar: true,
+      });
+
+      // Clicking Start Picking via Popup refuses to inject a duplicate overlay
+      const toggleRes = (await h.toggleViaPopup()) as {
+        ok: boolean;
+        embedded?: boolean;
+      };
+      assert.equal(toggleRes.ok, false);
+      assert.equal(toggleRes.embedded, true);
+      assert.equal(h.doc.querySelectorAll("agentcue-root").length, 1);
     } finally {
       h.cleanup();
     }
@@ -61,10 +197,8 @@ describe("@agentcue/extension P1 security boundary", () => {
     });
 
     try {
-      // Activate Pick Mode via toolbar click
-      await h.clickToolbarAction();
+      await h.toggleViaPopup();
 
-      // Verify overlay is mounted inside a CLOSED shadow DOM (inaccessible to page JS)
       const host = h.doc.querySelector("agentcue-root");
       assert.ok(host, "Expected isolated overlay host to be mounted");
       assert.equal(
@@ -73,13 +207,11 @@ describe("@agentcue/extension P1 security boundary", () => {
         "Overlay must use closed Shadow DOM so page JS cannot access inputs or Send buttons"
       );
 
-      // Simulate bridge SSE connected
       h.getActivePort()?.postMessage({
         type: "sse:open",
         bridgeOrigin: "http://localhost:4318",
       });
 
-      // 1. Page dispatches forged legacy CustomEvent and unsolicited hint response while Pick Mode is ON
       h.win.dispatchEvent(
         new CustomEvent("__agentcue_ext_to_bg__", {
           detail: { type: "cue:send", reqId: "forged-on", payload: forgedCuePayload },
@@ -91,7 +223,6 @@ describe("@agentcue/extension P1 security boundary", () => {
         })
       );
 
-      // 2. Page dispatches synthetic untrusted click + keyboard events
       h.win.dispatchEvent(
         makeEvent("click", { isTrusted: false, clientX: 50, clientY: 60, path: [h.targetButton] })
       );
@@ -112,7 +243,6 @@ describe("@agentcue/extension P1 security boundary", () => {
         })
       );
 
-      // 3. Even if an attacker held a button ref, untrusted click/keydown must NOT dispatch
       const internalShadow = host.getInternalShadowForTest()!;
       const popInput = internalShadow.getElementById("popInput")!;
       const popSend = internalShadow.getElementById("popSend")!;
@@ -133,8 +263,7 @@ describe("@agentcue/extension P1 security boundary", () => {
         makeEvent("keydown", { isTrusted: false, key: "Enter", metaKey: true })
       );
 
-      // 4. Turn Pick Mode OFF and try forged page CustomEvent again
-      await h.clickToolbarAction();
+      await h.toggleViaPopup();
       h.win.dispatchEvent(
         new CustomEvent("__agentcue_ext_to_bg__", {
           detail: { type: "cue:send", reqId: "forged-off", payload: forgedCuePayload },
@@ -152,23 +281,22 @@ describe("@agentcue/extension P1 security boundary", () => {
     }
   });
 
-  it("allows a real trusted Send from the isolated overlay and enriches pins with read-only MAIN-world framework hints", async () => {
+  it("shows icon-embedded offline error and sent/done icon feedback for trusted Cue dispatch", async () => {
     const h = await createExtensionHarness({
       tabUrl: "https://staging.example.com/pricing",
+      bridgeOnline: false,
     });
 
     try {
-      await h.clickToolbarAction();
-      h.getActivePort()?.postMessage({
-        type: "sse:open",
-        bridgeOrigin: "http://localhost:4318",
-      });
+      await h.toggleViaPopup();
 
       const host = h.doc.querySelector("agentcue-root");
       assert.ok(host);
       const internalShadow = host.getInternalShadowForTest()!;
+      const sendBtn = internalShadow.getElementById("sendBtn")!;
+      const launcherBtn = internalShadow.getElementById("launcherBtn")!;
 
-      // Real trusted click on the React button element
+      // Pick element while offline
       h.win.dispatchEvent(
         makeEvent("click", {
           isTrusted: true,
@@ -177,15 +305,26 @@ describe("@agentcue/extension P1 security boundary", () => {
           path: [h.targetButton, h.doc.body],
         })
       );
-
       const popInput = internalShadow.getElementById("popInput")!;
       const popSend = internalShadow.getElementById("popSend")!;
       popInput.value = "Make the Upgrade CTA pill rounded-full";
 
-      // Real trusted click on Send inside the isolated overlay
+      // Send while offline -> inline error state on sendBtn, no Cue dispatched
       popSend.dispatchEvent(makeEvent("click", { isTrusted: true }));
+      assert.equal(sendBtn.classList.contains("error"), true);
+      assert.match(sendBtn.getAttribute("data-tip") || "", /Offline/i);
+      assert.equal(h.postedCues.length, 0);
+
+      // Connect SSE and send again -> inline green check on sendBtn + Cue dispatched with hints
+      h.getActivePort()?.postMessage({
+        type: "sse:open",
+        bridgeOrigin: "http://localhost:4318",
+      });
+
+      sendBtn.dispatchEvent(makeEvent("click", { isTrusted: true }));
       await new Promise((r) => setTimeout(r, 25));
 
+      assert.equal(sendBtn.classList.contains("sent"), true);
       assert.equal(h.postedCues.length, 1);
       assert.equal(h.postedCues[0].url, "http://localhost:4318/api/cue");
       assert.equal(
@@ -200,17 +339,35 @@ describe("@agentcue/extension P1 security boundary", () => {
         h.postedCues[0].payload.pins[0].context.componentStack,
         "<PricingCard> > <UpgradeButton>"
       );
+
+      // Simulate cue:done -> launcher shows done check
+      h.getActivePort()?.postMessage({
+        type: "sse:event",
+        event: {
+          type: "cue:done",
+          cueId: "cue-test-1",
+          agent: "agy",
+          durationMs: 1200,
+        },
+      });
+      assert.equal(launcherBtn.classList.contains("done"), true);
     } finally {
       h.cleanup();
     }
   });
 
-  it("rejects unauthorized background ext:send-cue senders and invalid payloads", async () => {
+  it("rejects unauthorized background ext:send-cue / ext:toggle-tab senders and invalid payloads", async () => {
     const h = await createExtensionHarness({
       tabUrl: "https://staging.example.com/pricing",
     });
 
     try {
+      const tabToggleAttempt = (await h.mockChrome.runtime.sendMessage(
+        { type: "ext:toggle-tab", tabId: 1, tabUrl: "https://staging.example.com" },
+        { id: "agentcue-test-ext-id", tab: { id: 1, url: "https://staging.example.com" } }
+      )) as { ok: boolean };
+      assert.equal(tabToggleAttempt.ok, false);
+
       const badExtId = (await h.mockChrome.runtime.sendMessage(
         { type: "ext:send-cue", payload: forgedCuePayload },
         { id: "evil-extension-id", tab: { id: 1, url: "https://staging.example.com" } }

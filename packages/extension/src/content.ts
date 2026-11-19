@@ -12,12 +12,16 @@ import type {
 import type { AgentId } from "../../agentcue/src/shared/types.ts";
 import {
   DEFAULT_BRIDGE_ORIGIN,
+  DEFAULT_EXTENSION_SETTINGS,
   HINT_REQUEST_EVENT,
   HINT_RESPONSE_EVENT,
-  isLocalhostUrl,
+  normalizeSettings,
   sanitizeFrameworkHints,
   SSE_PORT_NAME,
   STORAGE_SELECTED_AGENT_KEY,
+  STORAGE_SETTINGS_KEY,
+  type EmbeddedSdkSource,
+  type ExtensionSettings,
   type SsePortMessage,
   type TabCommandMessage,
 } from "./protocol.ts";
@@ -146,22 +150,9 @@ export function initContentBridge(): void {
 
   let overlayInstance: OverlayInstance | null = null;
   let initialAgent: string | null = null;
+  let currentSettings: ExtensionSettings = { ...DEFAULT_EXTENSION_SETTINGS };
   let listeningHints = false;
   let capturedHints: FrameworkHints | undefined;
-
-  try {
-    void chrome.storage?.local
-      ?.get(STORAGE_SELECTED_AGENT_KEY)
-      .then((stored) => {
-        const val = stored?.[STORAGE_SELECTED_AGENT_KEY];
-        if (typeof val === "string") initialAgent = val;
-      })
-      .catch(() => {
-        // ignore storage read errors
-      });
-  } catch {
-    // ignore storage unavailability
-  }
 
   document.addEventListener(HINT_RESPONSE_EVENT, (evt: Event) => {
     if (!listeningHints) return;
@@ -185,45 +176,133 @@ export function initContentBridge(): void {
     return capturedHints;
   }
 
-  function bootIsolatedOverlay(
-    mode: "toggle" | "auto",
-    bridgeOrigin = DEFAULT_BRIDGE_ORIGIN
-  ): { active: boolean } {
+  function notifyActiveChange(active: boolean) {
+    try {
+      void chrome.runtime
+        .sendMessage({ type: "ext:active-changed", active })
+        .catch(() => {
+          // ignore if background worker is sleeping
+        });
+    } catch {
+      // ignore runtime errors
+    }
+  }
+
+  function notifyEmbeddedDetected(embeddedSource: EmbeddedSdkSource) {
+    try {
+      void chrome.runtime
+        .sendMessage({ type: "ext:embedded-detected", embeddedSource })
+        .catch(() => {
+          // ignore if background worker is sleeping
+        });
+    } catch {
+      // ignore runtime errors
+    }
+  }
+
+  function detectEmbeddedSource(): EmbeddedSdkSource | null {
+    const scripts = document.querySelectorAll("script[src]");
+    let scriptSource: EmbeddedSdkSource | null = null;
+    for (let i = 0; i < scripts.length; i++) {
+      const src = scripts[i].getAttribute("src") || "";
+      if (src.includes("/__agentcue/")) {
+        scriptSource = "vite";
+        break;
+      }
+      if (src.includes("agentcue") || /\/client\.js(?:[?#]|$)/.test(src)) {
+        scriptSource = "script";
+      }
+    }
+    if (scriptSource === "vite") return "vite";
+
+    const roots = document.querySelectorAll("agentcue-root");
+    for (let i = 0; i < roots.length; i++) {
+      const el = roots[i];
+      if (el.shadowRoot !== null || el.hasAttribute("data-agentcue-embedded")) {
+        return scriptSource ?? "sdk";
+      }
+    }
+    return null;
+  }
+
+  function unmountOverlay() {
+    if (!overlayInstance) return;
+    overlayInstance.destroy();
+    overlayInstance = null;
+  }
+
+  function mountWithSettings(
+    bridgeOrigin: string,
+    showFloatingBar: boolean,
+    startActive: boolean
+  ) {
     if (overlayInstance) {
-      if (mode === "toggle") {
+      overlayInstance.setHideLauncherWhenIdle(!showFloatingBar);
+      if (startActive) {
         overlayInstance.togglePickMode();
       }
-      return { active: overlayInstance.isActive() };
+      return;
     }
 
-    if (mode === "auto" && document.querySelector("agentcue-root")) {
-      return { active: false };
-    }
-
-    const mountNow = () => {
+    const doMount = () => {
+      if (detectEmbeddedSource()) return;
       if (!overlayInstance) {
         overlayInstance = mountOverlay(bridgeOrigin, {
           transport: createExtensionBridgeTransport(),
-          startActive: mode === "toggle",
+          startActive,
           shadowMode: "closed",
           requireTrustedSend: true,
+          hideLauncherWhenIdle: !showFloatingBar,
+          onActiveChange: notifyActiveChange,
           resolveFrameworkHints: requestMainWorldHints,
           stateStore: createIsolatedStateStore(initialAgent),
         });
-      } else if (mode === "toggle") {
-        overlayInstance.togglePickMode();
       }
     };
 
     if (document.documentElement) {
-      mountNow();
+      doMount();
     } else {
-      window.addEventListener("DOMContentLoaded", mountNow, { once: true });
+      window.addEventListener("DOMContentLoaded", doMount, { once: true });
+    }
+  }
+
+  function syncLifecycle(settings: ExtensionSettings) {
+    currentSettings = settings;
+    const embeddedSource = detectEmbeddedSource();
+    if (embeddedSource) {
+      unmountOverlay();
+      notifyEmbeddedDetected(embeddedSource);
+      return;
+    }
+    if (!settings.enabled) {
+      unmountOverlay();
+      return;
+    }
+    mountWithSettings(settings.bridgeOrigin, settings.showFloatingBar, false);
+  }
+
+  function bootIsolatedOverlay(
+    bridgeOrigin = DEFAULT_BRIDGE_ORIGIN,
+    showFloatingBar = currentSettings.showFloatingBar
+  ): { active: boolean; embedded?: boolean; embeddedSource?: EmbeddedSdkSource } {
+    const embeddedSource = detectEmbeddedSource();
+    if (embeddedSource) {
+      unmountOverlay();
+      notifyEmbeddedDetected(embeddedSource);
+      return { active: false, embedded: true, embeddedSource };
     }
 
+    if (overlayInstance) {
+      overlayInstance.setHideLauncherWhenIdle(!showFloatingBar);
+      overlayInstance.togglePickMode();
+      return { active: overlayInstance.isActive() };
+    }
+
+    mountWithSettings(bridgeOrigin, showFloatingBar, true);
     const mounted = overlayInstance as OverlayInstance | null;
     return {
-      active: mounted ? mounted.isActive() : mode === "toggle",
+      active: mounted ? mounted.isActive() : true,
     };
   }
 
@@ -232,23 +311,68 @@ export function initContentBridge(): void {
     if (!msg || typeof msg !== "object") return false;
 
     if (msg.type === "ext:boot") {
-      const result = bootIsolatedOverlay(msg.mode, msg.bridgeOrigin);
+      const result = bootIsolatedOverlay(
+        msg.bridgeOrigin,
+        msg.showFloatingBar ?? currentSettings.showFloatingBar
+      );
       sendResponse(result);
+      return false;
+    }
+
+    if (msg.type === "ext:get-state") {
+      const embeddedSource = detectEmbeddedSource();
+      if (embeddedSource && overlayInstance) {
+        unmountOverlay();
+      }
+      sendResponse({
+        active: overlayInstance?.isActive() ?? false,
+        embedded: Boolean(embeddedSource),
+        ...(embeddedSource ? { embeddedSource } : {}),
+      });
+      return false;
+    }
+
+    if (msg.type === "ext:sync-settings") {
+      syncLifecycle(normalizeSettings(msg));
+      sendResponse({ ok: true });
       return false;
     }
 
     return false;
   });
 
-  if (isLocalhostUrl(window.location.href)) {
-    void chrome.runtime
-      .sendMessage({
-        type: "ext:content-ready",
-        url: window.location.href,
+  chrome.storage?.onChanged?.addListener((changes, areaName) => {
+    if (areaName === "local" && changes[STORAGE_SETTINGS_KEY]) {
+      syncLifecycle(normalizeSettings(changes[STORAGE_SETTINGS_KEY].newValue));
+    }
+  });
+
+  if (typeof MutationObserver !== "undefined" && document.documentElement) {
+    const observer = new MutationObserver(() => {
+      if (!overlayInstance) return;
+      const embeddedSource = detectEmbeddedSource();
+      if (embeddedSource) {
+        unmountOverlay();
+        notifyEmbeddedDetected(embeddedSource);
+      }
+    });
+    observer.observe(document.documentElement, { childList: true });
+  }
+
+  try {
+    void chrome.storage?.local
+      ?.get([STORAGE_SETTINGS_KEY, STORAGE_SELECTED_AGENT_KEY])
+      .then((stored) => {
+        const agentVal = stored?.[STORAGE_SELECTED_AGENT_KEY];
+        if (typeof agentVal === "string") initialAgent = agentVal;
+        const settings = normalizeSettings(stored?.[STORAGE_SETTINGS_KEY]);
+        syncLifecycle(settings);
       })
       .catch(() => {
-        // ignore if background is waking up
+        syncLifecycle({ ...DEFAULT_EXTENSION_SETTINGS });
       });
+  } catch {
+    // ignore storage unavailability
   }
 }
 
