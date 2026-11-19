@@ -92,7 +92,7 @@ run = "bun test packages/extension"
 
 [tasks."web:build"]
 description = "Build @agentcue/web showcase"
-depends = ["agentcue:build:client", "extension:build"]
+depends = ["agentcue:build:client"]
 dir = "apps/web"
 run = "bun scripts/build.mjs"
 

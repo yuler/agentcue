@@ -60,11 +60,23 @@ Then attach the overlay in the browser using any output printed in your terminal
 
 ### Browser Extension (Chrome / Edge / Arc / Brave)
 
-Use the Manifest V3 browser extension (`packages/extension`) to activate **Pick Mode** on any tab with a single toolbar click or `Cmd/Ctrl + Shift + F`, while automatically mounting the collapsed `✦` launcher on `localhost` / `127.0.0.1` dev servers:
+Use the Manifest V3 browser extension (`packages/extension`) to activate **Pick Mode** on any tab with a single toolbar click or `Cmd/Ctrl + Shift + F`, while automatically mounting the collapsed `✦` launcher on `localhost` / `127.0.0.1` dev servers. See [Browser Extension Version](#browser-extension-version) for download and manual install.
 
-1. Download [`agentcue-extension.zip`](https://agentcue.yuler.dev/agentcue-extension.zip) (or build locally with `mise run extension:build` to produce `packages/extension/dist`).
-2. Open `chrome://extensions`, enable **Developer mode**, and click **Load unpacked** pointing to the unzipped folder (or `packages/extension/dist`).
-3. Start `npx agentcue` in your project workspace (or use `C` / **Copy Markdown** standalone on any webpage without a local bridge). Right-click the extension icon to configure a custom Bridge URL or toggle `localhost` auto-mount.
+## Browser Extension Version
+
+The browser extension ships with the **same version** as the `agentcue` npm package and the GitHub release tag (`vX.Y.Z`).
+
+**Download (latest):** [`agentcue-extension.zip`](https://github.com/yuler/agentcue/releases/latest/download/agentcue-extension.zip)
+
+Each [GitHub Release](https://github.com/yuler/agentcue/releases) also attaches a versioned asset such as `agentcue-extension-vX.Y.Z.zip`.
+
+### Manual install (Chrome / Edge / Arc / Brave)
+
+1. Download and unzip `agentcue-extension.zip`.
+2. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the unzipped folder.
+3. Start `npx agentcue` in your project workspace (or use `C` / **Copy Markdown** standalone without a local bridge). Right-click the extension icon to configure Bridge URL or `localhost` auto-mount.
+
+For local development builds: `mise run extension:build` → `packages/extension/dist`.
 
 ## Browser Shortcuts
 
