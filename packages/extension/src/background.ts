@@ -381,13 +381,14 @@ function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
   return !sender.tab;
 }
 
-function createSharedSseHub() {
+export function createSharedSseHub() {
   const ports = new Set<chrome.runtime.Port>();
   let abortController: AbortController | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let streamOpen = false;
   let openOrigin = DEFAULT_EXTENSION_SETTINGS.bridgeOrigin;
   let lastStateEvent: ServerEvent | null = null;
+  let connectGeneration = 0;
 
   const postToPort = (port: chrome.runtime.Port, msg: SsePortMessage) => {
     try {
@@ -415,12 +416,28 @@ function createSharedSseHub() {
     streamOpen = false;
   };
 
+  const isCurrentAttempt = (generation: number) => generation === connectGeneration;
+
+  const invalidateConnectAttempts = () => {
+    connectGeneration += 1;
+    stopUpstream();
+  };
+
+  const scheduleRetry = (generation: number) => {
+    retryTimer = setTimeout(() => {
+      if (isCurrentAttempt(generation) && ports.size > 0) {
+        void connectLoop();
+      }
+    }, 2500);
+  };
+
   const connectLoop = async () => {
+    const generation = ++connectGeneration;
     stopUpstream();
     if (ports.size === 0) return;
 
     const { bridgeOrigin } = await loadSettings();
-    if (ports.size === 0) return;
+    if (!isCurrentAttempt(generation) || ports.size === 0) return;
 
     const controller = new AbortController();
     abortController = controller;
@@ -433,6 +450,15 @@ function createSharedSseHub() {
         signal: controller.signal,
       });
 
+      if (!isCurrentAttempt(generation) || ports.size === 0) {
+        try {
+          await res.body?.cancel();
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
       if (!res.ok || !res.body) {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -442,22 +468,26 @@ function createSharedSseHub() {
       broadcast({ type: "sse:open", bridgeOrigin });
 
       await consumeSseResponse(res.body, (event) => {
+        if (!isCurrentAttempt(generation)) return;
         if (event.type === "state") {
           lastStateEvent = event;
         }
         broadcast({ type: "sse:event", event });
       });
 
+      if (!isCurrentAttempt(generation)) return;
+
       streamOpen = false;
       if (ports.size > 0 && !controller.signal.aborted) {
         broadcast({ type: "sse:error" });
-        retryTimer = setTimeout(() => void connectLoop(), 2500);
+        scheduleRetry(generation);
       }
     } catch {
+      if (!isCurrentAttempt(generation)) return;
       streamOpen = false;
       if (ports.size > 0 && !controller.signal.aborted) {
         broadcast({ type: "sse:error" });
-        retryTimer = setTimeout(() => void connectLoop(), 2500);
+        scheduleRetry(generation);
       }
     }
   };
@@ -481,7 +511,7 @@ function createSharedSseHub() {
       port.onDisconnect.addListener(() => {
         ports.delete(port);
         if (ports.size === 0) {
-          stopUpstream();
+          invalidateConnectAttempts();
         }
       });
 
