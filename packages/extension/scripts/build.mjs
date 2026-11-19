@@ -101,6 +101,30 @@ function bundleEntry(entryFile, outFile, format) {
   );
 }
 
+function isValidChromeManifestVersion(version) {
+  if (typeof version !== "string") return false;
+  const trimmed = version.trim();
+  if (!/^\d+(\.\d+){0,3}$/.test(trimmed)) return false;
+  const parts = trimmed.split(".").map(Number);
+  if (parts.some((n) => n < 0 || n > 65535)) return false;
+  return parts.some((n) => n > 0);
+}
+
+function resolveManifestVersion(coreVersion, fallbackVersion) {
+  const candidates = [
+    process.env.AGENTCUE_EXTENSION_VERSION,
+    coreVersion,
+    fallbackVersion,
+    "0.0.1",
+  ];
+  for (const candidate of candidates) {
+    if (isValidChromeManifestVersion(candidate)) {
+      return candidate.trim();
+    }
+  }
+  return "0.0.1";
+}
+
 function buildAll({ skipTypes = false } = {}) {
   mkdirSync(distIconsDir, { recursive: true });
 
@@ -122,15 +146,15 @@ function buildAll({ skipTypes = false } = {}) {
     }
   }
 
-  // Sync version from packages/agentcue/package.json into dist/manifest.json
+  // Sync a valid non-zero MV3 version (never inherit 0.0.0 placeholder)
   const corePkgPath = join(repoRoot, "packages", "agentcue", "package.json");
   const corePkg = existsSync(corePkgPath)
     ? JSON.parse(readFileSync(corePkgPath, "utf-8"))
-    : { version: "0.0.1" };
+    : {};
   const manifest = JSON.parse(
     readFileSync(join(extRoot, "manifest.json"), "utf-8")
   );
-  manifest.version = corePkg.version || manifest.version;
+  manifest.version = resolveManifestVersion(corePkg.version, manifest.version);
   writeFileSync(
     join(distDir, "manifest.json"),
     `${JSON.stringify(manifest, null, 2)}\n`,

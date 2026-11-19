@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "apps/web/**"
+      - "packages/extension/**"
       - "packages/agentcue/src/client/**"
       - "packages/agentcue/src/shared/**"
       - "packages/agentcue/scripts/build.mjs"

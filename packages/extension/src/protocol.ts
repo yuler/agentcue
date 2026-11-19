@@ -1,16 +1,23 @@
+import type { FrameworkHints } from "../../agentcue/src/client/extract.ts";
 import type { CueDispatchResult } from "../../agentcue/src/client/transport.ts";
-import type {
-  CuePayload,
-  DispatcherState,
-  ServerEvent,
+import {
+  SUPPORTED_AGENTS,
+  type AgentId,
+  type CuePayload,
+  type DispatcherState,
+  type ServerEvent,
 } from "../../agentcue/src/shared/types.ts";
 
 export const DEFAULT_BRIDGE_ORIGIN = "http://localhost:4318";
 export const STORAGE_SETTINGS_KEY = "agentcue:extension-settings";
+export const STORAGE_SELECTED_AGENT_KEY = "agentcue:extension-selected-agent";
 export const SSE_PORT_NAME = "agentcue-sse";
 
-export const PAGE_TO_CONTENT_EVENT = "__agentcue_ext_to_bg__";
-export const CONTENT_TO_PAGE_EVENT = "__agentcue_ext_to_page__";
+/** Read-only DOM events for extracting optional MAIN-world framework hints (never carries commands). */
+export const HINT_REQUEST_EVENT = "__agentcue_hint_req__";
+export const HINT_RESPONSE_EVENT = "__agentcue_hint_res__";
+
+const MAX_HINT_LENGTH = 200;
 
 export interface ExtensionSettings {
   bridgeOrigin: string;
@@ -22,16 +29,16 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   autoMountLocalhost: true,
 };
 
-export type PageToContentMessage =
-  | { type: "cue:send"; reqId: string; payload: CuePayload }
-  | { type: "sse:connect" }
-  | { type: "sse:disconnect" };
-
-export type ContentToPageMessage =
-  | { type: "cue:result"; reqId: string; result: CueDispatchResult }
+export type SsePortMessage =
   | { type: "sse:open"; bridgeOrigin: string }
   | { type: "sse:event"; event: ServerEvent }
   | { type: "sse:error" };
+
+export type TabCommandMessage = {
+  type: "ext:boot";
+  mode: "toggle" | "auto";
+  bridgeOrigin: string;
+};
 
 export type RuntimeRequestMessage =
   | { type: "ext:content-ready"; url: string }
@@ -43,6 +50,64 @@ export interface BridgeHealthResult {
   bridgeOrigin: string;
   state?: DispatcherState;
   error?: string;
+}
+
+function sanitizeHintString(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const cleaned = raw
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return undefined;
+  return cleaned.length > MAX_HINT_LENGTH
+    ? cleaned.slice(0, MAX_HINT_LENGTH)
+    : cleaned;
+}
+
+/**
+ * Strictly validates and bounds untrusted framework hints extracted from the
+ * page's MAIN world. Never trusts arbitrary object prototypes or control chars.
+ */
+export function sanitizeFrameworkHints(raw: unknown): FrameworkHints {
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== "object") return {};
+  const obj = parsed as Record<string, unknown>;
+  const sourceHint = sanitizeHintString(obj.sourceHint);
+  const componentStack = sanitizeHintString(obj.componentStack);
+  return {
+    ...(sourceHint ? { sourceHint } : {}),
+    ...(componentStack ? { componentStack } : {}),
+  };
+}
+
+export function isValidCuePayload(raw: unknown): raw is CuePayload {
+  if (!raw || typeof raw !== "object") return false;
+  const obj = raw as Record<string, unknown>;
+  if (
+    typeof obj.agent !== "string" ||
+    !SUPPORTED_AGENTS.includes(obj.agent as AgentId)
+  ) {
+    return false;
+  }
+  if (typeof obj.continueSession !== "boolean") return false;
+  if (typeof obj.pageUrl !== "string" || typeof obj.pageTitle !== "string") {
+    return false;
+  }
+  if (!Array.isArray(obj.pins) || obj.pins.length === 0) return false;
+  for (const pin of obj.pins) {
+    if (!pin || typeof pin !== "object") return false;
+    const p = pin as Record<string, unknown>;
+    if (typeof p.note !== "string" || !p.note.trim()) return false;
+    if (!p.context || typeof p.context !== "object") return false;
+  }
+  return true;
 }
 
 export function normalizeBridgeOrigin(raw: unknown): string {

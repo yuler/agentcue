@@ -12,8 +12,10 @@ import {
   fetchBridgeState,
   isInjectableTabUrl,
   isLocalhostUrl,
+  isValidCuePayload,
   normalizeBridgeOrigin,
   normalizeSettings,
+  sanitizeFrameworkHints,
   sendCueToBridge,
 } from "../src/protocol.ts";
 
@@ -130,12 +132,45 @@ describe("@agentcue/extension protocol & helpers", () => {
     }
   });
 
+  it("sanitizes untrusted MAIN-world framework hints and validates Cue payloads", () => {
+    assert.deepEqual(
+      sanitizeFrameworkHints(
+        JSON.stringify({
+          sourceHint: "src/App.tsx:42\n\r\t",
+          componentStack: "<App> > <Button>",
+          extra: "ignored",
+        })
+      ),
+      {
+        sourceHint: "src/App.tsx:42",
+        componentStack: "<App> > <Button>",
+      }
+    );
+
+    const longHint = "a".repeat(500);
+    assert.equal(sanitizeFrameworkHints({ sourceHint: longHint }).sourceHint?.length, 200);
+    assert.deepEqual(sanitizeFrameworkHints("{not-json"), {});
+    assert.deepEqual(sanitizeFrameworkHints({ sourceHint: 123, componentStack: null }), {});
+
+    assert.equal(isValidCuePayload(sampleCue), true);
+    assert.equal(isValidCuePayload({ ...sampleCue, agent: "unknown-agent" }), false);
+    assert.equal(isValidCuePayload({ ...sampleCue, pins: [] }), false);
+    assert.equal(
+      isValidCuePayload({
+        ...sampleCue,
+        pins: [{ ...sampleCue.pins[0], note: "   " }],
+      }),
+      false
+    );
+  });
+
   it("produces complete MV3 unpacked build artifacts and zip bundle", () => {
     const manifestPath = join(distDir, "manifest.json");
     assert.equal(existsSync(manifestPath), true);
 
     const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
       manifest_version: number;
+      version: string;
       background: { service_worker: string };
       content_scripts: Array<{ js: string[] }>;
       options_ui: { page: string };
@@ -143,9 +178,26 @@ describe("@agentcue/extension protocol & helpers", () => {
     };
 
     assert.equal(manifest.manifest_version, 3);
+    assert.match(manifest.version, /^\d+(\.\d+){0,3}$/);
+    assert.notEqual(
+      manifest.version,
+      "0.0.0",
+      "Chrome MV3 manifest.version must not inherit 0.0.0 placeholder"
+    );
+    assert.ok(
+      manifest.version.split(".").some((n) => Number(n) > 0),
+      "Chrome MV3 manifest.version must have at least one non-zero component"
+    );
     assert.equal(manifest.background.service_worker, "background.js");
     assert.deepEqual(manifest.content_scripts[0].js, ["content.js"]);
     assert.equal(manifest.options_ui.page, "options.html");
+
+    const contentBundle = readFileSync(join(distDir, "content.js"), "utf-8");
+    assert.equal(
+      contentBundle.includes("__agentcue_ext_to_bg__"),
+      false,
+      "content.js must not expose the legacy public page CustomEvent send channel"
+    );
 
     const requiredFiles = [
       "background.js",

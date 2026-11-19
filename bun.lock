@@ -35,7 +35,7 @@
     },
     "packages/agentcue": {
       "name": "agentcue",
-      "version": "0.0.1",
+      "version": "0.0.0",
       "bin": {
         "agentcue": "./dist/cli.js",
       },
@@ -52,7 +52,7 @@
     },
     "packages/extension": {
       "name": "@agentcue/extension",
-      "version": "0.0.1",
+      "version": "0.0.0",
       "devDependencies": {
         "@types/node": "^22.0.0",
         "typescript": "^5.8.0",

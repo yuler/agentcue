@@ -4,13 +4,14 @@ import {
   fetchBridgeState,
   isInjectableTabUrl,
   isLocalhostUrl,
+  isValidCuePayload,
   normalizeSettings,
   sendCueToBridge,
   SSE_PORT_NAME,
   STORAGE_SETTINGS_KEY,
-  type ContentToPageMessage,
   type ExtensionSettings,
   type RuntimeRequestMessage,
+  type SsePortMessage,
 } from "./protocol.ts";
 
 const MENU_AUTO_MOUNT = "agentcue:menu:auto-mount-localhost";
@@ -62,34 +63,24 @@ async function injectAndBootOnTab(
     world: "ISOLATED",
   });
 
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ["page.js"],
-    world: "MAIN",
+  // Read-only MAIN-world framework hint extractor (optional, best-effort).
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["page.js"],
+      world: "MAIN",
+    });
+  } catch {
+    // Continue without framework hints if MAIN-world injection is restricted
+  }
+
+  const res = await chrome.tabs.sendMessage<{ active?: boolean }>(tabId, {
+    type: "ext:boot",
+    mode,
+    bridgeOrigin,
   });
 
-  const results = await chrome.scripting.executeScript<
-    [string, string],
-    { active: boolean } | undefined
-  >({
-    target: { tabId },
-    world: "MAIN",
-    func: (bootMode: string, origin: string) => {
-      const w = window as unknown as {
-        __AGENTCUE_EXTENSION_BOOT__?: (
-          m: "toggle" | "auto",
-          o: string
-        ) => { active: boolean };
-      };
-      return w.__AGENTCUE_EXTENSION_BOOT__?.(
-        bootMode as "toggle" | "auto",
-        origin
-      );
-    },
-    args: [mode, bridgeOrigin],
-  });
-
-  return Boolean(results?.[0]?.result?.active);
+  return Boolean(res?.active);
 }
 
 async function setTabBadge(tabId: number, active: boolean) {
@@ -107,12 +98,22 @@ async function setTabBadge(tabId: number, active: boolean) {
   }
 }
 
+function isAuthorizedTabSender(sender: chrome.runtime.MessageSender): boolean {
+  if (chrome.runtime.id && sender.id && sender.id !== chrome.runtime.id) {
+    return false;
+  }
+  if (typeof sender.tab?.id !== "number") {
+    return false;
+  }
+  return isInjectableTabUrl(sender.tab.url);
+}
+
 function attachSseStreamToPort(port: chrome.runtime.Port) {
   let closed = false;
   let abortController: AbortController | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const postToPort = (msg: ContentToPageMessage) => {
+  const postToPort = (msg: SsePortMessage) => {
     if (closed) return;
     try {
       port.postMessage(msg);
@@ -185,113 +186,136 @@ function attachSseStreamToPort(port: chrome.runtime.Port) {
   port.onDisconnect.addListener(() => {
     closed = true;
     stopCurrentAttempt();
+    chrome.storage.onChanged.removeListener?.(storageListener);
   });
 
   void connectLoop();
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  void setupContextMenus();
-});
+export function initBackground(): void {
+  chrome.runtime.onInstalled.addListener(() => {
+    void setupContextMenus();
+  });
 
-chrome.runtime.onStartup.addListener(() => {
-  void setupContextMenus();
-});
+  chrome.runtime.onStartup.addListener(() => {
+    void setupContextMenus();
+  });
 
-chrome.contextMenus.onClicked.addListener((info) => {
-  if (info.menuItemId === MENU_AUTO_MOUNT) {
-    void saveSettings({ autoMountLocalhost: Boolean(info.checked) });
-  } else if (info.menuItemId === MENU_OPEN_OPTIONS) {
-    void chrome.runtime.openOptionsPage();
-  }
-});
-
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === "local" && changes[STORAGE_SETTINGS_KEY]) {
-    const next = normalizeSettings(changes[STORAGE_SETTINGS_KEY].newValue);
-    try {
-      chrome.contextMenus.update(MENU_AUTO_MOUNT, {
-        checked: next.autoMountLocalhost,
-      });
-    } catch {
-      // ignore if menu not created yet
+  chrome.contextMenus.onClicked.addListener((info) => {
+    if (info.menuItemId === MENU_AUTO_MOUNT) {
+      void saveSettings({ autoMountLocalhost: Boolean(info.checked) });
+    } else if (info.menuItemId === MENU_OPEN_OPTIONS) {
+      void chrome.runtime.openOptionsPage();
     }
-  }
-});
+  });
 
-chrome.action.onClicked.addListener((tab) => {
-  const tabId = tab.id;
-  if (typeof tabId !== "number") return;
-
-  if (!isInjectableTabUrl(tab.url)) {
-    void chrome.action.setBadgeBackgroundColor({ tabId, color: "#ef4444" });
-    void chrome.action.setBadgeText({ tabId, text: "N/A" });
-    setTimeout(() => {
-      void chrome.action.setBadgeText({ tabId, text: "" });
-    }, 1800);
-    return;
-  }
-
-  void (async () => {
-    try {
-      const settings = await loadSettings();
-      const active = await injectAndBootOnTab(
-        tabId,
-        "toggle",
-        settings.bridgeOrigin
-      );
-      await setTabBadge(tabId, active);
-    } catch {
-      // Restricted browser internal pages cannot be scripted
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === "local" && changes[STORAGE_SETTINGS_KEY]) {
+      const next = normalizeSettings(changes[STORAGE_SETTINGS_KEY].newValue);
+      try {
+        chrome.contextMenus.update(MENU_AUTO_MOUNT, {
+          checked: next.autoMountLocalhost,
+        });
+      } catch {
+        // ignore if menu not created yet
+      }
     }
-  })();
-});
+  });
 
-chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
-  const msg = raw as RuntimeRequestMessage;
-  if (!msg || typeof msg !== "object") return;
+  chrome.action.onClicked.addListener((tab) => {
+    const tabId = tab.id;
+    if (typeof tabId !== "number") return;
 
-  if (msg.type === "ext:content-ready") {
-    const tabId = sender.tab?.id;
-    const url = msg.url || sender.tab?.url;
-    if (typeof tabId === "number" && isLocalhostUrl(url)) {
+    if (!isInjectableTabUrl(tab.url)) {
+      void chrome.action.setBadgeBackgroundColor({ tabId, color: "#ef4444" });
+      void chrome.action.setBadgeText({ tabId, text: "N/A" });
+      setTimeout(() => {
+        void chrome.action.setBadgeText({ tabId, text: "" });
+      }, 1800);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const settings = await loadSettings();
+        const active = await injectAndBootOnTab(
+          tabId,
+          "toggle",
+          settings.bridgeOrigin
+        );
+        await setTabBadge(tabId, active);
+      } catch {
+        // Restricted browser internal pages cannot be scripted
+      }
+    })();
+  });
+
+  chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
+    const msg = raw as RuntimeRequestMessage;
+    if (!msg || typeof msg !== "object") return false;
+
+    if (msg.type === "ext:content-ready") {
+      const tabId = sender.tab?.id;
+      const url = sender.tab?.url || msg.url;
+      if (typeof tabId === "number" && isLocalhostUrl(url)) {
+        void (async () => {
+          const settings = await loadSettings();
+          if (settings.autoMountLocalhost) {
+            await injectAndBootOnTab(tabId, "auto", settings.bridgeOrigin);
+          }
+          sendResponse({ ok: true });
+        })();
+        return true;
+      }
+      sendResponse({ ok: false });
+      return false;
+    }
+
+    if (msg.type === "ext:send-cue") {
+      if (!isAuthorizedTabSender(sender)) {
+        sendResponse({
+          ok: false,
+          status: 403,
+          error: "Unauthorized Cue sender",
+        });
+        return false;
+      }
+      if (!isValidCuePayload(msg.payload)) {
+        sendResponse({
+          ok: false,
+          status: 400,
+          error: "Invalid Cue payload",
+        });
+        return false;
+      }
       void (async () => {
         const settings = await loadSettings();
-        if (settings.autoMountLocalhost) {
-          await injectAndBootOnTab(tabId, "auto", settings.bridgeOrigin);
-        }
-        sendResponse({ ok: true });
+        const result = await sendCueToBridge(settings.bridgeOrigin, msg.payload);
+        sendResponse(result);
       })();
       return true;
     }
-    sendResponse({ ok: false });
+
+    if (msg.type === "ext:check-bridge") {
+      void (async () => {
+        const settings = await loadSettings();
+        const origin = msg.bridgeOrigin || settings.bridgeOrigin;
+        const health = await fetchBridgeState(origin);
+        sendResponse(health);
+      })();
+      return true;
+    }
+
     return false;
-  }
+  });
 
-  if (msg.type === "ext:send-cue") {
-    void (async () => {
-      const settings = await loadSettings();
-      const result = await sendCueToBridge(settings.bridgeOrigin, msg.payload);
-      sendResponse(result);
-    })();
-    return true;
-  }
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name === SSE_PORT_NAME) {
+      attachSseStreamToPort(port);
+    }
+  });
+}
 
-  if (msg.type === "ext:check-bridge") {
-    void (async () => {
-      const settings = await loadSettings();
-      const origin = msg.bridgeOrigin || settings.bridgeOrigin;
-      const health = await fetchBridgeState(origin);
-      sendResponse(health);
-    })();
-    return true;
-  }
-
-  return false;
-});
-
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === SSE_PORT_NAME) {
-    attachSseStreamToPort(port);
-  }
-});
+if (typeof chrome !== "undefined" && Boolean(chrome.runtime?.onMessage)) {
+  initBackground();
+}

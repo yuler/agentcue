@@ -1,13 +1,13 @@
 {
   "name": "@agentcue/extension",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "private": true,
   "description": "Manifest V3 browser extension for agentcue — pick DOM elements on any page and push Cues straight to your local Agent CLI.",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "dev": "node scripts/build.mjs --watch",
+    "build": "bun scripts/build.mjs",
+    "dev": "bun scripts/build.mjs --watch",
     "test": "bun test"
   },
   "devDependencies": {

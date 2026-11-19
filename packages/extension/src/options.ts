@@ -15,6 +15,17 @@ const statusPill = document.getElementById("bridge-status-pill") as HTMLDivEleme
 const statusText = document.getElementById("bridge-status-text") as HTMLSpanElement;
 const detailsEl = document.getElementById("bridge-details") as HTMLDivElement;
 
+function renderBridgeDetails(lines: Array<[label: string, value: string]>) {
+  detailsEl.textContent = "";
+  lines.forEach(([label, value], idx) => {
+    if (idx > 0) detailsEl.appendChild(document.createElement("br"));
+    const strong = document.createElement("strong");
+    strong.textContent = label;
+    detailsEl.appendChild(strong);
+    detailsEl.appendChild(document.createTextNode(value));
+  });
+}
+
 async function checkBridgeStatus(bridgeOrigin: string) {
   statusPill.className = "status-pill";
   statusText.textContent = "Checking…";
@@ -30,11 +41,25 @@ async function checkBridgeStatus(bridgeOrigin: string) {
       statusText.textContent = "Bridge Online";
       const agents =
         res.state.agents.length > 0 ? res.state.agents.join(", ") : "none detected";
-      detailsEl.innerHTML = `<strong>Workspace:</strong> ${res.state.cwd}<br/><strong>Agents:</strong> ${agents}`;
+      renderBridgeDetails([
+        ["Workspace: ", res.state.cwd],
+        ["Agents: ", agents],
+      ]);
     } else {
       statusPill.className = "status-pill offline";
       statusText.textContent = "Bridge Offline";
-      detailsEl.innerHTML = `Daemon not reachable at <strong>${bridgeOrigin}</strong>. Run <strong>npx agentcue</strong> in your terminal (Copy Markdown still works offline).`;
+      detailsEl.textContent = "";
+      detailsEl.appendChild(document.createTextNode("Daemon not reachable at "));
+      const originStrong = document.createElement("strong");
+      originStrong.textContent = bridgeOrigin;
+      detailsEl.appendChild(originStrong);
+      detailsEl.appendChild(document.createTextNode(". Run "));
+      const cmdStrong = document.createElement("strong");
+      cmdStrong.textContent = "npx agentcue";
+      detailsEl.appendChild(cmdStrong);
+      detailsEl.appendChild(
+        document.createTextNode(" in your terminal (Copy Markdown still works offline).")
+      );
     }
   } catch {
     statusPill.className = "status-pill offline";

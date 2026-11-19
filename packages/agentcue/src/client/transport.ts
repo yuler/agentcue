@@ -1,4 +1,6 @@
 import type { CuePayload, ServerEvent } from "../shared/types.ts";
+import type { OverlayStateStore } from "./dom.ts";
+import type { FrameworkHints } from "./extract.ts";
 
 export interface CueDispatchResult {
   ok: boolean;
@@ -17,6 +19,21 @@ export interface BridgeTransportHandlers {
 export interface BridgeTransport {
   sendCue: (payload: CuePayload) => Promise<CueDispatchResult>;
   subscribeEvents: (handlers: BridgeTransportHandlers) => () => void;
+}
+
+export interface MountOverlayOptions {
+  transport?: BridgeTransport;
+  startActive?: boolean;
+  shadowMode?: "open" | "closed";
+  requireTrustedSend?: boolean;
+  resolveFrameworkHints?: (el: Element) => FrameworkHints | undefined;
+  stateStore?: OverlayStateStore;
+}
+
+export interface OverlayInstance {
+  togglePickMode: () => void;
+  setActive: (next: boolean) => void;
+  isActive: () => boolean;
 }
 
 export function createHttpBridgeTransport(

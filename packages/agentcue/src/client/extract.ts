@@ -175,46 +175,17 @@ function parseReactDebugStack(stack: string): string | undefined {
   return undefined;
 }
 
-export function detectFrameworkHints(el: Element): {
+export interface FrameworkHints {
   sourceHint?: string;
   componentStack?: string;
-} {
+}
+
+export function detectMainWorldFrameworkHints(el: Element): FrameworkHints {
   let sourceHint: string | undefined;
   const components: string[] = [];
-
-  // 1. Standard / framework dev data attributes (walk up to body)
-  let attrNode: Element | null = el;
-  for (let i = 0; i < 12 && attrNode && !sourceHint; i++) {
-    const directSource = attrNode.getAttribute("data-source");
-    if (directSource) {
-      sourceHint = directSource;
-      break;
-    }
-
-    const astroFile = attrNode.getAttribute("data-astro-source-file");
-    if (astroFile) {
-      const astroLoc = attrNode.getAttribute("data-astro-source-loc");
-      sourceHint = astroLoc ? `${astroFile}:${astroLoc}` : astroFile;
-      break;
-    }
-
-    const vitePath =
-      attrNode.getAttribute("data-inspector-relative-path") ||
-      attrNode.getAttribute("data-v-inspector-file");
-    if (vitePath) {
-      const line =
-        attrNode.getAttribute("data-inspector-line") ||
-        attrNode.getAttribute("data-v-inspector-line");
-      sourceHint = line ? `${vitePath}:${line}` : vitePath;
-      break;
-    }
-
-    attrNode = attrNode.parentElement;
-  }
-
   const anyEl = el as unknown as Record<string, unknown>;
 
-  // 2. Svelte dev metadata
+  // 1. Svelte dev metadata
   const svelteMeta = anyEl.__svelte_meta as
     | { loc?: { file?: string; line?: number; column?: number } }
     | undefined;
@@ -223,7 +194,7 @@ export function detectFrameworkHints(el: Element): {
     sourceHint = line != null ? `${file}:${line}` : file;
   }
 
-  // 3. Vue 3 component instance
+  // 2. Vue 3 component instance
   let vueComp = anyEl.__vueParentComponent as
     | {
         type?: { name?: string; __name?: string; __file?: string };
@@ -243,7 +214,7 @@ export function detectFrameworkHints(el: Element): {
     hops++;
   }
 
-  // 4. React Fiber tree
+  // 3. React Fiber tree
   const fiberKey = Object.keys(el).find(
     (k) =>
       k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$")
@@ -291,7 +262,50 @@ export function detectFrameworkHints(el: Element): {
   };
 }
 
-export function extractPinContext(el: Element): PinContext {
+export function detectFrameworkHints(el: Element): FrameworkHints {
+  let sourceHint: string | undefined;
+
+  // Standard / framework dev data attributes (walk up to body)
+  let attrNode: Element | null = el;
+  for (let i = 0; i < 12 && attrNode && !sourceHint; i++) {
+    const directSource = attrNode.getAttribute("data-source");
+    if (directSource) {
+      sourceHint = directSource;
+      break;
+    }
+
+    const astroFile = attrNode.getAttribute("data-astro-source-file");
+    if (astroFile) {
+      const astroLoc = attrNode.getAttribute("data-astro-source-loc");
+      sourceHint = astroLoc ? `${astroFile}:${astroLoc}` : astroFile;
+      break;
+    }
+
+    const vitePath =
+      attrNode.getAttribute("data-inspector-relative-path") ||
+      attrNode.getAttribute("data-v-inspector-file");
+    if (vitePath) {
+      const line =
+        attrNode.getAttribute("data-inspector-line") ||
+        attrNode.getAttribute("data-v-inspector-line");
+      sourceHint = line ? `${vitePath}:${line}` : vitePath;
+      break;
+    }
+
+    attrNode = attrNode.parentElement;
+  }
+
+  const mainWorld = detectMainWorldFrameworkHints(el);
+  return {
+    sourceHint: sourceHint ?? mainWorld.sourceHint,
+    componentStack: mainWorld.componentStack,
+  };
+}
+
+export function extractPinContext(
+  el: Element,
+  resolveFrameworkHints?: (el: Element) => FrameworkHints | undefined
+): PinContext {
   const win = el.ownerDocument.defaultView;
   const computed = win ? win.getComputedStyle(el) : null;
   const styles: Record<string, string> = {};
@@ -309,7 +323,14 @@ export function extractPinContext(el: Element): PinContext {
   const textExcerpt =
     rawText.length > 140 ? `${rawText.slice(0, 140)}…` : rawText;
 
-  const { sourceHint, componentStack } = detectFrameworkHints(el);
+  let { sourceHint, componentStack } = detectFrameworkHints(el);
+  if ((!sourceHint || !componentStack) && resolveFrameworkHints) {
+    const extra = resolveFrameworkHints(el);
+    if (extra) {
+      sourceHint = sourceHint ?? extra.sourceHint;
+      componentStack = componentStack ?? extra.componentStack;
+    }
+  }
 
   return {
     tagName: el.tagName.toLowerCase(),

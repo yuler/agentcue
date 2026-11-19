@@ -1,6 +1,9 @@
 declare namespace chrome {
   namespace runtime {
+    const id: string | undefined;
+
     interface MessageSender {
+      id?: string;
       tab?: tabs.Tab;
       url?: string;
     }
@@ -48,6 +51,8 @@ declare namespace chrome {
       url?: string;
       title?: string;
     }
+
+    function sendMessage<T = unknown>(tabId: number, message: unknown): Promise<T>;
   }
 
   namespace action {
@@ -89,6 +94,12 @@ declare namespace chrome {
 
     const onChanged: {
       addListener(
+        callback: (
+          changes: Record<string, StorageChange>,
+          areaName: string
+        ) => void
+      ): void;
+      removeListener(
         callback: (
           changes: Record<string, StorageChange>,
           areaName: string
