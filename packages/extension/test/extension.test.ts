@@ -57,14 +57,17 @@ describe("@agentcue/extension protocol & helpers", () => {
 
     const defaults = normalizeSettings(null);
     assert.equal(defaults.bridgeOrigin, DEFAULT_BRIDGE_ORIGIN);
-    assert.equal(defaults.autoMountLocalhost, true);
+    assert.equal(defaults.enabled, true);
+    assert.equal(defaults.showFloatingBar, true);
 
     const custom = normalizeSettings({
       bridgeOrigin: "127.0.0.1:5000",
-      autoMountLocalhost: false,
+      enabled: false,
+      showFloatingBar: false,
     });
     assert.equal(custom.bridgeOrigin, "http://127.0.0.1:5000");
-    assert.equal(custom.autoMountLocalhost, false);
+    assert.equal(custom.enabled, false);
+    assert.equal(custom.showFloatingBar, false);
   });
 
   it("classifies localhost URLs and injectable tab URLs accurately", () => {
@@ -171,9 +174,12 @@ describe("@agentcue/extension protocol & helpers", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
       manifest_version: number;
       version: string;
+      permissions: string[];
+      action: { default_popup?: string };
       background: { service_worker: string };
-      content_scripts: Array<{ js: string[] }>;
-      options_ui: { page: string };
+      commands: Record<string, { suggested_key?: Record<string, string> }>;
+      content_scripts?: unknown;
+      options_ui?: unknown;
       icons: Record<string, string>;
     };
 
@@ -189,8 +195,18 @@ describe("@agentcue/extension protocol & helpers", () => {
       "Chrome MV3 manifest.version must have at least one non-zero component"
     );
     assert.equal(manifest.background.service_worker, "background.js");
-    assert.deepEqual(manifest.content_scripts[0].js, ["content.js"]);
-    assert.equal(manifest.options_ui.page, "options.html");
+    assert.equal(manifest.action.default_popup, "popup.html");
+    assert.equal(
+      manifest.commands,
+      undefined,
+      "Extension must not register global Chrome commands that hijack Ctrl+Shift+F from embedded pages"
+    );
+    assert.equal(manifest.permissions.includes("contextMenus"), false);
+    assert.deepEqual(
+      (manifest.content_scripts as Array<{ js: string[] }>)[0].js,
+      ["content.js"]
+    );
+    assert.equal(manifest.options_ui, undefined);
 
     const contentBundle = readFileSync(join(distDir, "content.js"), "utf-8");
     assert.equal(
@@ -203,12 +219,20 @@ describe("@agentcue/extension protocol & helpers", () => {
       "background.js",
       "content.js",
       "page.js",
-      "options.html",
-      "options.js",
+      "popup.html",
+      "popup.js",
       "icons/icon-16.png",
       "icons/icon-32.png",
       "icons/icon-48.png",
       "icons/icon-128.png",
+      "icons/icon-active-16.png",
+      "icons/icon-active-32.png",
+      "icons/icon-active-48.png",
+      "icons/icon-active-128.png",
+      "icons/icon-disabled-16.png",
+      "icons/icon-disabled-32.png",
+      "icons/icon-disabled-48.png",
+      "icons/icon-disabled-128.png",
       "agentcue-extension.zip",
     ];
 

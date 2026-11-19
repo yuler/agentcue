@@ -21,12 +21,14 @@ const MAX_HINT_LENGTH = 200;
 
 export interface ExtensionSettings {
   bridgeOrigin: string;
-  autoMountLocalhost: boolean;
+  enabled: boolean;
+  showFloatingBar: boolean;
 }
 
 export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   bridgeOrigin: DEFAULT_BRIDGE_ORIGIN,
-  autoMountLocalhost: true,
+  enabled: true,
+  showFloatingBar: true,
 };
 
 export type SsePortMessage =
@@ -34,16 +36,50 @@ export type SsePortMessage =
   | { type: "sse:event"; event: ServerEvent }
   | { type: "sse:error" };
 
-export type TabCommandMessage = {
-  type: "ext:boot";
-  mode: "toggle" | "auto";
-  bridgeOrigin: string;
-};
+export type TabCommandMessage =
+  | { type: "ext:boot"; bridgeOrigin: string; showFloatingBar?: boolean }
+  | { type: "ext:get-state" }
+  | {
+      type: "ext:sync-settings";
+      enabled: boolean;
+      showFloatingBar: boolean;
+      bridgeOrigin: string;
+    };
 
 export type RuntimeRequestMessage =
-  | { type: "ext:content-ready"; url: string }
+  | { type: "ext:toggle-tab"; tabId: number; tabUrl?: string }
+  | { type: "ext:tab-state"; tabId: number; tabUrl?: string }
+  | {
+      type: "ext:update-settings";
+      enabled?: boolean;
+      showFloatingBar?: boolean;
+      tabId?: number;
+      tabUrl?: string;
+    }
+  | { type: "ext:active-changed"; active: boolean }
+  | { type: "ext:embedded-detected"; embeddedSource: EmbeddedSdkSource }
   | { type: "ext:send-cue"; payload: CuePayload }
   | { type: "ext:check-bridge"; bridgeOrigin?: string };
+
+export type EmbeddedSdkSource = "vite" | "script" | "sdk";
+
+export interface TabStateResult {
+  injectable: boolean;
+  active: boolean;
+  embedded: boolean;
+  embeddedSource?: EmbeddedSdkSource;
+  enabled: boolean;
+  showFloatingBar: boolean;
+}
+
+export interface TabToggleResult {
+  ok: boolean;
+  active: boolean;
+  embedded?: boolean;
+  embeddedSource?: EmbeddedSdkSource;
+  disabled?: boolean;
+  error?: string;
+}
 
 export interface BridgeHealthResult {
   ok: boolean;
@@ -135,10 +171,14 @@ export function normalizeSettings(raw: unknown): ExtensionSettings {
   const obj = raw as Record<string, unknown>;
   return {
     bridgeOrigin: normalizeBridgeOrigin(obj.bridgeOrigin),
-    autoMountLocalhost:
-      typeof obj.autoMountLocalhost === "boolean"
-        ? obj.autoMountLocalhost
-        : DEFAULT_EXTENSION_SETTINGS.autoMountLocalhost,
+    enabled:
+      typeof obj.enabled === "boolean"
+        ? obj.enabled
+        : DEFAULT_EXTENSION_SETTINGS.enabled,
+    showFloatingBar:
+      typeof obj.showFloatingBar === "boolean"
+        ? obj.showFloatingBar
+        : DEFAULT_EXTENSION_SETTINGS.showFloatingBar,
   };
 }
 

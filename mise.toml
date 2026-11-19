@@ -88,6 +88,17 @@ description = "Run @agentcue/extension protocol, security boundary, and build ar
 depends = ["extension:build"]
 run = "bun test packages/extension"
 
+[tasks."extension:install:local"]
+description = "Build and install local @agentcue/extension to ~/.local/share/agentcue/extension"
+depends = ["extension:build"]
+dir = "packages/extension"
+run = "bun scripts/install.mjs --local"
+
+[tasks."extension:install:production"]
+description = "Download and install production @agentcue/extension to ~/.local/share/agentcue/extension"
+dir = "packages/extension"
+run = "bun scripts/install.mjs --production"
+
 # ─── App: web ────────────────────────────────────────────────────────────────
 
 [tasks."web:build"]

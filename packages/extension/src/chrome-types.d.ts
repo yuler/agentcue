@@ -23,7 +23,12 @@ declare namespace chrome {
 
     function connect(connectInfo?: { name?: string }): Port;
     function sendMessage<T = unknown>(message: unknown): Promise<T>;
-    function openOptionsPage(): Promise<void>;
+    function getManifest(): {
+      name?: string;
+      short_name?: string;
+      version?: string;
+      version_name?: string;
+    };
 
     const onInstalled: {
       addListener(callback: () => void): void;
@@ -52,19 +57,44 @@ declare namespace chrome {
       title?: string;
     }
 
+    interface TabChangeInfo {
+      status?: string;
+      url?: string;
+    }
+
+    function query(queryInfo: {
+      active?: boolean;
+      currentWindow?: boolean;
+    }): Promise<Tab[]>;
     function sendMessage<T = unknown>(tabId: number, message: unknown): Promise<T>;
+
+    const onUpdated: {
+      addListener(
+        callback: (tabId: number, changeInfo: TabChangeInfo, tab: Tab) => void
+      ): void;
+    };
+    const onRemoved: {
+      addListener(callback: (tabId: number) => void): void;
+    };
+  }
+
+  namespace commands {
+    const onCommand: {
+      addListener(callback: (command: string, tab?: tabs.Tab) => void): void;
+    };
   }
 
   namespace action {
+    function setIcon(details: {
+      path: Record<string, string>;
+      tabId?: number;
+    }): Promise<void>;
+    function setTitle(details: { title: string; tabId?: number }): Promise<void>;
     function setBadgeText(details: { text: string; tabId?: number }): Promise<void>;
     function setBadgeBackgroundColor(details: {
       color: string;
       tabId?: number;
     }): Promise<void>;
-
-    const onClicked: {
-      addListener(callback: (tab: tabs.Tab) => void): void;
-    };
   }
 
   namespace scripting {
@@ -88,7 +118,9 @@ declare namespace chrome {
     }
 
     const local: {
-      get(keys?: string | string[] | Record<string, unknown> | null): Promise<Record<string, unknown>>;
+      get(
+        keys?: string | string[] | Record<string, unknown> | null
+      ): Promise<Record<string, unknown>>;
       set(items: Record<string, unknown>): Promise<void>;
     };
 
@@ -104,36 +136,6 @@ declare namespace chrome {
           changes: Record<string, StorageChange>,
           areaName: string
         ) => void
-      ): void;
-    };
-  }
-
-  namespace contextMenus {
-    interface OnClickData {
-      menuItemId: string | number;
-      checked?: boolean;
-    }
-
-    function removeAll(callback?: () => void): void;
-    function create(
-      createProperties: {
-        id: string;
-        title: string;
-        type?: "normal" | "checkbox" | "radio" | "separator";
-        checked?: boolean;
-        contexts?: Array<"action" | "page" | "all">;
-      },
-      callback?: () => void
-    ): void;
-    function update(
-      id: string,
-      updateProperties: { checked?: boolean; title?: string },
-      callback?: () => void
-    ): void;
-
-    const onClicked: {
-      addListener(
-        callback: (info: OnClickData, tab?: tabs.Tab) => void
       ): void;
     };
   }

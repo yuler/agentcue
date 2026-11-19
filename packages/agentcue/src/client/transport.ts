@@ -28,12 +28,16 @@ export interface MountOverlayOptions {
   requireTrustedSend?: boolean;
   resolveFrameworkHints?: (el: Element) => FrameworkHints | undefined;
   stateStore?: OverlayStateStore;
+  hideLauncherWhenIdle?: boolean;
+  onActiveChange?: (active: boolean) => void;
 }
 
 export interface OverlayInstance {
   togglePickMode: () => void;
   setActive: (next: boolean) => void;
   isActive: () => boolean;
+  setHideLauncherWhenIdle: (next: boolean) => void;
+  destroy: () => void;
 }
 
 export function createHttpBridgeTransport(

@@ -308,6 +308,9 @@ export function createOverlayDom(
   shadowMode: "open" | "closed" = "open"
 ) {
   const host = document.createElement("agentcue-root");
+  if (shadowMode === "open") {
+    host.setAttribute("data-agentcue-embedded", "true");
+  }
   const shadow = host.attachShadow({ mode: shadowMode });
 
   shadow.innerHTML = `
@@ -333,7 +336,6 @@ export function createOverlayDom(
       </div>
     </div>
     <div class="capsule-wrap">
-      <div class="toast" id="toast"></div>
       <div class="agent-menu" id="agentMenu">
         <div class="agent-menu-header">
           <span>Agent Target</span>
@@ -344,7 +346,10 @@ export function createOverlayDom(
       <div class="toolbar-stage">
         <button class="launcher" id="launcherBtn" title="Activate agentcue (${activateKeyLabel})">
           <span class="status-dot offline" id="launcherDot"></span>
-          ${ICON_LOGO}
+          <span class="launcher-icon-wrap">
+            ${ICON_LOGO}
+            <svg class="launcher-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
           <span class="launcher-text" id="launcherText"></span>
           <span class="launcher-count" id="launcherCount">0</span>
         </button>
@@ -360,7 +365,11 @@ export function createOverlayDom(
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
             <button class="tool-btn send-btn" id="sendBtn" data-tip="Send Cue · S / ${modEnterLabel}" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              <span class="send-icon-wrap">
+                <svg class="icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg class="icon-error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><circle cx="12" cy="16" r="0.8" fill="currentColor" stroke="none"/></svg>
+              </span>
               <span class="send-count" id="sendCount"></span>
             </button>
             <div class="sep"></div>
@@ -369,8 +378,9 @@ export function createOverlayDom(
               <span class="agent-name" id="agentLabel">agy</span>
               <span class="kbd">A</span>
             </button>
-            <button class="tool-btn" id="contBtn" data-tip="New Session (first Cue) · R">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            <button class="tool-btn cont-btn" id="contBtn" data-tip="New Session (first Cue) · R">
+              <svg class="icon-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </button>
             <div class="sep"></div>
             <button class="tool-btn" id="collapseBtn" data-tip="Collapse · Esc">
@@ -399,7 +409,6 @@ export function createOverlayDom(
     popInput: $<HTMLTextAreaElement>("popInput"),
     popSave: $<HTMLButtonElement>("popSave"),
     popSend: $<HTMLButtonElement>("popSend"),
-    toastEl: $<HTMLDivElement>("toast"),
     agentMenu: $<HTMLDivElement>("agentMenu"),
     agentMenuList: $<HTMLDivElement>("agentMenuList"),
     launcherBtn: $<HTMLButtonElement>("launcherBtn"),

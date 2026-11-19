@@ -163,19 +163,6 @@ export const OVERLAY_CSS = `
   position: fixed; right: 16px; bottom: 16px;
   display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none;
 }
-.toast {
-  pointer-events: none; max-width: 360px;
-  background: rgba(22, 22, 26, 0.96); border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px; padding: 6px 11px; font-size: 11.5px; color: #e4e4e7;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
-  opacity: 0; visibility: hidden; transform: translateY(6px) scale(0.95);
-  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 180ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 180ms;
-}
-.toast.visible {
-  pointer-events: auto; opacity: 1; visibility: visible; transform: translateY(0) scale(1);
-  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 180ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0s;
-}
-.toast.error { border-color: rgba(248, 113, 113, 0.5); color: #fecaca; }
 
 .agent-menu {
   pointer-events: none;
@@ -258,7 +245,28 @@ export const OVERLAY_CSS = `
     opacity 140ms ease,
     visibility 0s linear 210ms;
 }
-.launcher-logo { width: 16px; height: 16px; flex-shrink: 0; display: block; }
+.launcher-icon-wrap {
+  position: relative; width: 16px; height: 16px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.launcher-logo,
+.launcher-check {
+  width: 16px; height: 16px; flex-shrink: 0; display: block;
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 150ms ease;
+}
+.launcher-check {
+  position: absolute; opacity: 0; color: #34d399;
+  transform: scale(0.35) rotate(-20deg);
+}
+.launcher.done {
+  border-color: rgba(52, 211, 153, 0.45);
+}
+.launcher.done .launcher-logo {
+  opacity: 0; transform: scale(0.35) rotate(20deg);
+}
+.launcher.done .launcher-check {
+  opacity: 1; transform: scale(1) rotate(0deg);
+}
 .launcher-text { font-size: 11.5px; font-weight: 500; color: #cbd5e1; white-space: nowrap; }
 .launcher-text:empty { display: none; }
 .launcher-count {
@@ -379,6 +387,23 @@ export const OVERLAY_CSS = `
   font-size: 9.5px; opacity: 0.6;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+.tool-btn.cont-btn .icon-reset,
+.tool-btn.cont-btn .icon-check {
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 150ms ease;
+}
+.tool-btn.cont-btn .icon-check {
+  position: absolute; opacity: 0; transform: scale(0.35) rotate(-20deg);
+}
+.tool-btn.cont-btn.reset-done {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.16);
+}
+.tool-btn.cont-btn.reset-done .icon-reset {
+  opacity: 0; transform: scale(0.35) rotate(-45deg);
+}
+.tool-btn.cont-btn.reset-done .icon-check {
+  opacity: 1; transform: scale(1) rotate(0deg);
+}
 .tool-btn.send-btn {
   width: auto; min-width: 32px; padding: 0 8px;
   background: rgba(16, 185, 129, 0.18);
@@ -388,6 +413,53 @@ export const OVERLAY_CSS = `
   background: #10b981; color: #052e16;
 }
 .tool-btn.send-btn:hover:not(:disabled) { background: #34d399; }
+.send-icon-wrap {
+  position: relative; width: 15px; height: 15px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tool-btn.send-btn .icon-send,
+.tool-btn.send-btn .icon-check,
+.tool-btn.send-btn .icon-error {
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 150ms ease;
+}
+.tool-btn.send-btn .icon-check,
+.tool-btn.send-btn .icon-error {
+  position: absolute; opacity: 0; transform: scale(0.35) rotate(-20deg);
+}
+.tool-btn.send-btn.sent,
+.tool-btn.send-btn.sent:disabled {
+  opacity: 1;
+  background: #10b981; color: #052e16;
+}
+.tool-btn.send-btn.sent .icon-send,
+.tool-btn.send-btn.error .icon-send {
+  opacity: 0; transform: scale(0.35) rotate(20deg);
+}
+.tool-btn.send-btn.sent .icon-check {
+  opacity: 1; transform: scale(1) rotate(0deg);
+}
+.tool-btn.send-btn.sent .send-count { display: none; }
+.tool-btn.send-btn.error,
+.tool-btn.send-btn.error:disabled {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.22);
+  color: #f87171;
+  animation: cueShake 320ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+.tool-btn.send-btn.error:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+}
+.tool-btn.send-btn.error .icon-error {
+  opacity: 1; transform: scale(1) rotate(0deg);
+}
+.tool-btn.send-btn.error .send-count { display: none; }
+@keyframes cueShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  45% { transform: translateX(3px); }
+  70% { transform: translateX(-2px); }
+  88% { transform: translateX(1.5px); }
+}
 .send-count {
   font-size: 11px; font-weight: 700; line-height: 1;
 }
@@ -400,6 +472,7 @@ export const OVERLAY_CSS = `
   background: rgba(18, 18, 22, 0.96); color: #f4f4f6;
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px;
   padding: 3px 7px; font-size: 10.5px; font-weight: 500; white-space: nowrap;
+  max-width: 300px; overflow: hidden; text-overflow: ellipsis;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
   pointer-events: none; opacity: 0; visibility: hidden;
   transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 120ms;

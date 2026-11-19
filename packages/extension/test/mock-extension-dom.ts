@@ -288,8 +288,21 @@ export class MockDocument extends MockNode {
   }
 
   querySelectorAll(selector: string): MockElement[] {
-    const found = this.querySelector(selector);
-    return found ? [found] : [];
+    const attrMatch = selector.match(/^([a-z0-9-]+)\[([a-z0-9-]+)\]$/i);
+    const targetTag = (attrMatch ? attrMatch[1] : selector).toUpperCase();
+    const requiredAttr = attrMatch ? attrMatch[2] : null;
+    const results: MockElement[] = [];
+    const walk = (node: MockElement) => {
+      if (
+        node.tagName === targetTag &&
+        (!requiredAttr || node.hasAttribute(requiredAttr))
+      ) {
+        results.push(node);
+      }
+      for (const child of node.children) walk(child);
+    };
+    walk(this.documentElement);
+    return results;
   }
 
   dispatchEvent(evt: Event | MockEvent): boolean {
@@ -333,11 +346,16 @@ interface MockPort {
 
 export async function createExtensionHarness(options: {
   tabUrl: string;
-  autoMountLocalhost?: boolean;
+  bridgeOnline?: boolean;
 }) {
+  const { initBackground } = await import("../src/background.ts");
+  const { initContentBridge } = await import("../src/content.ts");
+  const { initPageHintExtractor } = await import("../src/page.ts");
+
   const doc = new MockDocument();
   const win = new MockWindow(options.tabUrl);
   doc.defaultView = win;
+  let bridgeOnline = options.bridgeOnline ?? true;
 
   const targetButton = doc.createElement("button");
   targetButton.id = "cta-btn";
@@ -356,7 +374,8 @@ export async function createExtensionHarness(options: {
   const storageData: Record<string, unknown> = {
     [STORAGE_SETTINGS_KEY]: {
       bridgeOrigin: "http://localhost:4318",
-      autoMountLocalhost: options.autoMountLocalhost ?? true,
+      enabled: true,
+      showFloatingBar: true,
     },
   };
 
@@ -368,7 +387,8 @@ export async function createExtensionHarness(options: {
 
   const bgRuntimeListeners: RuntimeMsgListener[] = [];
   const contentRuntimeListeners: RuntimeMsgListener[] = [];
-  const actionClickListeners: Array<(tab: { id?: number; url?: string }) => void> = [];
+  const commandListeners: Array<(command: string, tab?: { id?: number; url?: string }) => void> = [];
+  const tabUpdatedListeners: Array<(tabId: number, changeInfo: { status?: string }) => void> = [];
   const storageListeners = new Set<
     (changes: Record<string, { oldValue?: unknown; newValue?: unknown }>, area: string) => void
   >();
@@ -377,6 +397,8 @@ export async function createExtensionHarness(options: {
   let activeContentPort: MockPort | null = null;
   const injectedFiles: Array<{ file: string; world?: string }> = [];
   const postedCues: Array<{ url: string; payload: CuePayload }> = [];
+  const iconUpdates: Array<{ tabId?: number; path: Record<string, string> }> = [];
+  const badgeUpdates: Array<{ tabId?: number; text: string }> = [];
 
   const prevGlobals = {
     window: globalThis.window,
@@ -448,13 +470,17 @@ export async function createExtensionHarness(options: {
             tab: { id: 1, url: options.tabUrl },
           };
           let responded = false;
+          let isAsync = false;
           for (const listener of bgRuntimeListeners) {
-            listener(msg, sender, (res) => {
-              responded = true;
-              resolve(res);
+            const ret = listener(msg, sender, (res) => {
+              if (!responded) {
+                responded = true;
+                resolve(res);
+              }
             });
+            if (ret === true) isAsync = true;
           }
-          if (!responded) {
+          if (!responded && !isAsync) {
             setTimeout(() => {
               if (!responded) resolve(undefined);
             }, 0);
@@ -463,24 +489,56 @@ export async function createExtensionHarness(options: {
       openOptionsPage: async () => {},
     },
     tabs: {
+      query: async () => [{ id: 1, url: options.tabUrl }],
       sendMessage: (_tabId: number, msg: unknown) =>
-        new Promise((resolve) => {
+        new Promise((resolve, reject) => {
+          if (contentRuntimeListeners.length === 0) {
+            reject(new Error("Receiving end does not exist"));
+            return;
+          }
           for (const listener of contentRuntimeListeners) {
             listener(msg, { id: "agentcue-test-ext-id" }, (res) => resolve(res));
           }
         }),
+      onUpdated: {
+        addListener: (fn: (tabId: number, changeInfo: { status?: string }) => void) => {
+          tabUpdatedListeners.push(fn);
+        },
+      },
+      onRemoved: {
+        addListener: () => {},
+      },
     },
-    action: {
-      setBadgeText: async () => {},
-      setBadgeBackgroundColor: async () => {},
-      onClicked: {
-        addListener: (fn: (tab: { id?: number; url?: string }) => void) => {
-          actionClickListeners.push(fn);
+    commands: {
+      onCommand: {
+        addListener: (
+          fn: (command: string, tab?: { id?: number; url?: string }) => void
+        ) => {
+          commandListeners.push(fn);
         },
       },
     },
+    action: {
+      setIcon: async (details: { path: Record<string, string>; tabId?: number }) => {
+        iconUpdates.push(details);
+      },
+      setTitle: async () => {},
+      setBadgeText: async (details: { text: string; tabId?: number }) => {
+        badgeUpdates.push(details);
+      },
+      setBadgeBackgroundColor: async () => {},
+    },
     scripting: {
-      executeScript: async (inj: { files?: string[]; world?: string }) => {
+      executeScript: async (inj: {
+        files?: string[];
+        func?: (...args: unknown[]) => unknown;
+        args?: unknown[];
+        world?: string;
+      }) => {
+        if (typeof inj.func === "function") {
+          const result = inj.func(...(inj.args || []));
+          return [{ result }];
+        }
         for (const file of inj.files || []) {
           injectedFiles.push({ file, world: inj.world });
           if (file === "content.js") {
@@ -495,10 +553,23 @@ export async function createExtensionHarness(options: {
     },
     storage: {
       local: {
-        get: async (key?: string) =>
-          key ? { [key]: storageData[key] } : { ...storageData },
+        get: async (key?: string | string[] | null) => {
+          if (Array.isArray(key)) {
+            const out: Record<string, unknown> = {};
+            for (const k of key) out[k] = storageData[k];
+            return out;
+          }
+          return key ? { [key]: storageData[key] } : { ...storageData };
+        },
         set: async (items: Record<string, unknown>) => {
-          Object.assign(storageData, items);
+          const changes: Record<string, { oldValue?: unknown; newValue?: unknown }> = {};
+          for (const [k, v] of Object.entries(items)) {
+            changes[k] = { oldValue: storageData[k], newValue: v };
+            storageData[k] = v;
+          }
+          for (const fn of [...storageListeners]) {
+            fn(changes, "local");
+          }
         },
       },
       onChanged: {
@@ -509,12 +580,6 @@ export async function createExtensionHarness(options: {
           fn: (c: Record<string, { oldValue?: unknown; newValue?: unknown }>, a: string) => void
         ) => storageListeners.delete(fn),
       },
-    },
-    contextMenus: {
-      removeAll: (cb?: () => void) => cb?.(),
-      create: () => {},
-      update: () => {},
-      onClicked: { addListener: () => {} },
     },
   };
 
@@ -577,6 +642,9 @@ export async function createExtensionHarness(options: {
         );
       }
       if (url.endsWith("/api/events")) {
+        if (!bridgeOnline) {
+          return new Response("Offline", { status: 503 });
+        }
         return new Response(
           new ReadableStream({
             start(controller) {
@@ -596,10 +664,6 @@ export async function createExtensionHarness(options: {
     },
   });
 
-  const { initBackground } = await import("../src/background.ts");
-  const { initContentBridge } = await import("../src/content.ts");
-  const { initPageHintExtractor } = await import("../src/page.ts");
-
   registeringTarget = "bg";
   initBackground();
 
@@ -610,16 +674,57 @@ export async function createExtensionHarness(options: {
     mockChrome,
     postedCues,
     injectedFiles,
+    iconUpdates,
+    badgeUpdates,
+    setBridgeOnline: (next: boolean) => {
+      bridgeOnline = next;
+    },
     getActivePort: () => activeContentPort,
-    triggerContentLoad: () => {
+    triggerContentLoad: async () => {
       registeringTarget = "content";
       initContentBridge();
+      await new Promise((r) => setTimeout(r, 15));
     },
-    clickToolbarAction: async () => {
-      for (const fn of actionClickListeners) {
-        fn({ id: 1, url: options.tabUrl });
+    toggleViaPopup: async () => {
+      const res = await mockChrome.runtime.sendMessage(
+        { type: "ext:toggle-tab", tabId: 1, tabUrl: options.tabUrl },
+        { id: "agentcue-test-ext-id" }
+      );
+      await new Promise((r) => setTimeout(r, 15));
+      return res;
+    },
+    queryTabStateFromPopup: async () => {
+      return mockChrome.runtime.sendMessage(
+        { type: "ext:tab-state", tabId: 1, tabUrl: options.tabUrl },
+        { id: "agentcue-test-ext-id" }
+      );
+    },
+    updateSettingsFromPopup: async (patch: {
+      enabled?: boolean;
+      showFloatingBar?: boolean;
+    }) => {
+      const res = await mockChrome.runtime.sendMessage(
+        {
+          type: "ext:update-settings",
+          ...patch,
+          tabId: 1,
+          tabUrl: options.tabUrl,
+        },
+        { id: "agentcue-test-ext-id" }
+      );
+      await new Promise((r) => setTimeout(r, 15));
+      return res;
+    },
+    triggerCommand: async (command = "toggle-pick") => {
+      for (const fn of commandListeners) {
+        fn(command, { id: 1, url: options.tabUrl });
       }
       await new Promise((r) => setTimeout(r, 15));
+    },
+    triggerTabReload: () => {
+      for (const fn of tabUpdatedListeners) {
+        fn(1, { status: "loading" });
+      }
     },
     cleanup: () => {
       activeContentPort?.disconnect();
