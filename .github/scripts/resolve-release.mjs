@@ -1,4 +1,4 @@
-import { appendFileSync, copyFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 const pkgPath = "packages/agentcue/package.json";
@@ -46,6 +46,7 @@ export function isReleasePath(file) {
     file === "README.md" ||
     file === "LICENSE" ||
     file === "logo.svg" ||
+    file === "logo-dark.svg" ||
     file === "package.json" ||
     file === "bun.lock" ||
     file === "tsconfig.base.json"
@@ -205,7 +206,6 @@ const nextVersion = fmtSemver(targetSemver);
 if (!dryRun) {
   pkg.version = nextVersion;
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-  copyFileSync("README.md", "packages/agentcue/README.md");
 }
 
 console.log(

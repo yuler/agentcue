@@ -36,6 +36,7 @@ jobs:
               - 'README.md'
               - 'LICENSE'
               - 'logo.svg'
+              - 'logo-dark.svg'
               - 'package.json'
               - 'bun.lock'
               - 'tsconfig.base.json'

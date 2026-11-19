@@ -109,7 +109,19 @@ function buildAll({ skipTypes = false, clientOnly = false } = {}) {
     copyFileSync(demoSrc, join(distDir, "demo.html"));
   }
 
-  for (const docFile of ["README.md", "LICENSE", "logo.svg", "logo-dark.svg"]) {
+  const RAW_BASE = "https://raw.githubusercontent.com/yuler/agentcue/main";
+  const BLOB_BASE = "https://github.com/yuler/agentcue/blob/main";
+
+  const readmeSrc = join(repoRoot, "README.md");
+  if (existsSync(readmeSrc)) {
+    const readme = readFileSync(readmeSrc, "utf-8")
+      .replace(/\.\/logo-dark\.svg/g, `${RAW_BASE}/logo-dark.svg`)
+      .replace(/\.\/logo\.svg/g, `${RAW_BASE}/logo.svg`)
+      .replace(/\(\.\/mise\.toml\)/g, `(${BLOB_BASE}/mise.toml)`);
+    writeFileSync(join(pkgRoot, "README.md"), readme);
+  }
+
+  for (const docFile of ["LICENSE", "logo.svg", "logo-dark.svg"]) {
     const src = join(repoRoot, docFile);
     if (existsSync(src)) {
       copyFileSync(src, join(pkgRoot, docFile));
