@@ -1,4 +1,4 @@
-// Shadow DOM template and coordinate helpers live in ./dom.ts; bridge transport lives in ./transport.ts
+// Shadow DOM template lives in ./dom.ts; icon feedback in ./feedback.ts; shortcuts in ./shortcuts.ts; transport in ./transport.ts
 import {
   buildCuePayload,
   computeStatusView,
@@ -10,13 +10,14 @@ import {
   ICON_PAUSE,
   ICON_PICK,
   isMacPlatform,
-  isTypingInField,
   positionPopoverEl,
   renderAgentMenuDom,
   renderHoverElements,
   syncBadgeDom,
   type ActivePin,
 } from "./dom.ts";
+import { createOverlayFeedback } from "./feedback.ts";
+import { handleOverlayKeydown } from "./shortcuts.ts";
 import {
   createHttpBridgeTransport,
   type MountOverlayOptions,
@@ -40,9 +41,13 @@ export function mountOverlay(
   const stateStore = options?.stateStore ?? createBrowserOverlayStateStore();
   const requireTrustedSend = options?.requireTrustedSend ?? false;
   const resolveFrameworkHints = options?.resolveFrameworkHints;
+  let hideLauncherWhenIdle = options?.hideLauncherWhenIdle ?? false;
+  const onActiveChange = options?.onActiveChange;
   const isMac = isMacPlatform();
   const modEnterLabel = isMac ? "⌘↵" : "Ctrl+↵";
   const activateKeyLabel = isMac ? "⌘⇧F" : "Ctrl+Shift+F";
+  const defaultSendTip = `Send Cue · S / ${modEnterLabel}`;
+  const defaultLauncherTitle = `Activate agentcue (${activateKeyLabel})`;
   const {
     host,
     shadow,
@@ -56,7 +61,6 @@ export function mountOverlay(
     popInput,
     popSave,
     popSend,
-    toastEl,
     agentMenu,
     agentMenuList,
     launcherBtn,
@@ -96,20 +100,18 @@ export function mountOverlay(
   const inFlightBatches = new Map<string, ActivePin[]>();
   const earlyCueErrors = new Map<string, string>();
   const earlyCueDones = new Set<string>();
-  let toastTimer: ReturnType<typeof setTimeout> | null = null;
-  let copyTimer: ReturnType<typeof setTimeout> | null = null;
+  const feedback = createOverlayFeedback({
+    copyBtn,
+    contBtn,
+    sendBtn,
+    launcherBtn,
+    defaultSendTip,
+    defaultLauncherTitle,
+    onRenderControls: () => renderControls(),
+  });
 
   function getAgentList(): AgentId[] {
     return availableAgents.length > 0 ? availableAgents : [...SUPPORTED_AGENTS];
-  }
-
-  function showToast(msg: string, isError = false, ms = 3200) {
-    if (toastTimer) clearTimeout(toastTimer);
-    toastEl.textContent = msg;
-    toastEl.className = isError ? "toast visible error" : "toast visible";
-    toastTimer = setTimeout(() => {
-      toastEl.className = "toast";
-    }, ms);
   }
 
   function setAgentMenuOpen(open: boolean) {
@@ -130,14 +132,13 @@ export function mountOverlay(
   }
 
   function resetCurrentSession() {
-    if (!activeSessions.has(selectedAgent)) {
-      showToast(`Next Cue for ${selectedAgent} will already start a new session`);
-      return;
+    const wasInSession = activeSessions.has(selectedAgent);
+    if (wasInSession) {
+      activeSessions.delete(selectedAgent);
+      stateStore.saveActiveSessions(activeSessions);
+      renderControls();
     }
-    activeSessions.delete(selectedAgent);
-    stateStore.saveActiveSessions(activeSessions);
-    renderControls();
-    showToast(`Session reset · Next Cue starts a new ${selectedAgent} session`);
+    feedback.flashSessionReset(wasInSession, selectedAgent);
   }
 
   function cycleAgent(step = 1) {
@@ -165,10 +166,18 @@ export function mountOverlay(
     launcherDot.className = dotClass;
     agentBtn.setAttribute("data-tip", statusTip);
     launcherText.textContent = compactRunning;
+    if (hideLauncherWhenIdle) renderControls();
   }
 
   function renderControls() {
-    launcherBtn.classList.toggle("hidden", active);
+    const hasRunningCue = Boolean(serverState?.activeCue) || inFlightBatches.size > 0;
+    const hideLauncher =
+      active ||
+      (hideLauncherWhenIdle &&
+        pins.length === 0 &&
+        !hasRunningCue &&
+        !feedback.isLauncherDoneActive());
+    launcherBtn.classList.toggle("hidden", hideLauncher);
     capsule.classList.toggle("expanded", active);
     pinsLayer.classList.toggle("hidden", markersHidden);
 
@@ -179,10 +188,12 @@ export function mountOverlay(
 
     const inSession = activeSessions.has(selectedAgent);
     contBtn.classList.toggle("cont-active", inSession);
-    contBtn.setAttribute(
-      "data-tip",
-      inSession ? "Reset Session (in session) · R" : "New Session (1st Cue)"
-    );
+    if (!feedback.hasActiveContFeedback()) {
+      contBtn.setAttribute(
+        "data-tip",
+        inSession ? "Reset Session (in session) · R" : "New Session (1st Cue)"
+      );
+    }
     document.documentElement.style.cursor = picking ? "crosshair" : "";
 
     const committedCount = pins.filter((p) => p.note.trim().length > 0).length;
@@ -275,6 +286,8 @@ export function mountOverlay(
   }
 
   function setActive(next: boolean) {
+    feedback.cancelSendCollapse();
+    const changed = next !== active;
     if (next) {
       active = true;
       markersHidden = false;
@@ -288,6 +301,7 @@ export function mountOverlay(
       updateHoverBox(null);
       renderControls();
     }
+    if (changed) onActiveChange?.(active);
   }
 
   function clearAllPins() {
@@ -317,16 +331,11 @@ export function mountOverlay(
     if (ready.length === 0) return;
     const md = formatCuePrompt(buildCuePayload(selectedAgent, activeSessions.has(selectedAgent), ready));
     await navigator.clipboard.writeText(md);
-    if (copyTimer) clearTimeout(copyTimer);
-    copyBtn.classList.add("copied");
-    copyBtn.setAttribute("data-tip", "Copied ✓");
-    copyTimer = setTimeout(() => {
-      copyBtn.classList.remove("copied");
-      copyBtn.setAttribute("data-tip", "Copy Markdown · C");
-    }, 1600);
+    feedback.flashCopied();
   }
 
   function restoreFailedBatch(batch: ActivePin[], reason: string, wasFirstInSession = false) {
+    feedback.cancelSendCollapse();
     if (wasFirstInSession) {
       activeSessions.delete(selectedAgent);
       stateStore.saveActiveSessions(activeSessions);
@@ -337,7 +346,7 @@ export function mountOverlay(
     }
     setActive(true);
     renderPins();
-    showToast(`Cue failed — Pins restored: ${reason}`, true, 6500);
+    feedback.setSendFeedback("error", `Failed · ${reason}`, 3200);
   }
 
   async function dispatchCue(triggerEvent?: Event) {
@@ -345,10 +354,11 @@ export function mountOverlay(
     const ready = gatherReadyPins();
     if (ready.length === 0) return;
     if (!connected) {
-      showToast("Local agentcue daemon is offline. Use Copy or start `npx agentcue`.", true, 5000);
+      feedback.setSendFeedback("error", "Offline · Run npx agentcue or Copy", 2600);
       return;
     }
 
+    feedback.cancelSendCollapse();
     const continueSession = activeSessions.has(selectedAgent);
     const wasFirstInSession = !continueSession;
     activeSessions.add(selectedAgent);
@@ -357,8 +367,9 @@ export function mountOverlay(
     const payload = buildCuePayload(selectedAgent, continueSession, ready);
     const snapshot = [...ready];
     pins = [];
-    setActive(false);
     renderPins();
+    feedback.setSendFeedback("sent", `Sent ${snapshot.length} → ${selectedAgent} ✓`, 650);
+    feedback.scheduleSendCollapse(500, () => setActive(false));
 
     try {
       const data = await transport.sendCue(payload);
@@ -374,9 +385,9 @@ export function mountOverlay(
       }
       if (!earlyCueDones.delete(data.cueId)) {
         inFlightBatches.set(data.cueId, snapshot);
-        const qMsg = data.queuePosition && data.queuePosition > 1 ? ` (queued #${data.queuePosition})` : "";
-        const sMsg = continueSession ? " (continue)" : " (new session)";
-        showToast(`Sent ${snapshot.length} Pin(s) → ${selectedAgent}${sMsg}${qMsg}`);
+        const qMsg = data.queuePosition && data.queuePosition > 1 ? ` (#${data.queuePosition})` : "";
+        feedback.setSendTip(`Sent ${snapshot.length} → ${selectedAgent}${qMsg} ✓`);
+        renderControls();
       }
     } catch (err) {
       restoreFailedBatch(snapshot, err instanceof Error ? err.message : "Network error", wasFirstInSession);
@@ -431,7 +442,19 @@ export function mountOverlay(
     return e.composedPath().includes(host);
   }
 
-  window.addEventListener(
+  const windowCleanups: Array<() => void> = [];
+  function onWindow<K extends keyof WindowEventMap>(
+    type: K,
+    listener: (ev: WindowEventMap[K]) => void,
+    opts?: AddEventListenerOptions
+  ) {
+    window.addEventListener(type, listener as EventListener, opts);
+    windowCleanups.push(() =>
+      window.removeEventListener(type, listener as EventListener, opts)
+    );
+  }
+
+  onWindow(
     "mousemove",
     (e) => {
       if (!active || !pickMode || activePinId !== null || isOverlayEvent(e)) {
@@ -460,7 +483,7 @@ export function mountOverlay(
   });
 
   for (const evtName of ["pointerdown", "mousedown", "mouseup", "click"] as const) {
-    window.addEventListener(
+    onWindow(
       evtName,
       (e) => {
         if (requireTrustedSend && !e.isTrusted) return;
@@ -491,78 +514,30 @@ export function mountOverlay(
     );
   }
 
-  window.addEventListener(
+  onWindow(
     "keydown",
-    (e) => {
-      if (requireTrustedSend && !e.isTrusted) return;
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyF") {
-        e.preventDefault();
-        e.stopPropagation();
-        setActive(!active);
-        return;
-      }
-      if (!active) return;
-
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        if (activePinId !== null || pins.some((p) => p.note.trim().length > 0)) {
-          e.preventDefault();
-          e.stopPropagation();
-          void dispatchCue(e);
-        }
-        return;
-      }
-
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        if (activePinId !== null) {
-          closePopover(false);
-        } else if (agentMenuOpen) {
-          setAgentMenuOpen(false);
-        } else {
-          setActive(false);
-        }
-        return;
-      }
-
-      if (!e.metaKey && !e.ctrlKey && !e.altKey && activePinId === null && !isTypingInField(e)) {
-        if (e.code === "KeyA") {
-          e.preventDefault();
-          setAgentMenuOpen(!agentMenuOpen);
-        } else if (agentMenuOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-          e.preventDefault();
-          cycleAgent(e.key === "ArrowDown" ? 1 : -1);
-        } else if (agentMenuOpen && e.key === "Enter") {
-          e.preventDefault();
-          setAgentMenuOpen(false);
-        } else if (/^Digit[1-9]$/.test(e.code)) {
-          const idx = Number(e.code.slice(5)) - 1;
-          const list = getAgentList();
-          if (idx < list.length) {
-            e.preventDefault();
-            selectAgent(list[idx], true);
-          }
-        } else if (e.code === "KeyP") {
-          e.preventDefault();
-          setPickMode(!pickMode);
-        } else if (e.code === "KeyR") {
-          e.preventDefault();
-          resetCurrentSession();
-        } else if (e.code === "KeyS" && pins.some((p) => p.note.trim().length > 0)) {
-          e.preventDefault();
-          void dispatchCue(e);
-        } else if (e.code === "KeyC" && pins.some((p) => p.note.trim().length > 0)) {
-          e.preventDefault();
-          void copyMarkdown();
-        } else if (e.code === "KeyX" && pins.length > 0) {
-          e.preventDefault();
-          clearAllPins();
-        } else if (e.code === "KeyH" && pins.length > 0) {
-          e.preventDefault();
-          toggleMarkers();
-        }
-      }
-    },
+    (e) =>
+      handleOverlayKeydown(e, {
+        requireTrustedSend,
+        isActive: () => active,
+        isPickMode: () => pickMode,
+        isAgentMenuOpen: () => agentMenuOpen,
+        hasActivePin: () => activePinId !== null,
+        hasAnyPins: () => pins.length > 0,
+        hasReadyPins: () => pins.some((p) => p.note.trim().length > 0),
+        getAgentList,
+        setActive,
+        setPickMode,
+        setAgentMenuOpen,
+        cycleAgent,
+        selectAgent,
+        closePopover,
+        resetCurrentSession,
+        dispatchCue: (evt) => void dispatchCue(evt),
+        copyMarkdown: () => void copyMarkdown(),
+        clearAllPins,
+        toggleMarkers,
+      }),
     { capture: true }
   );
 
@@ -576,11 +551,11 @@ export function mountOverlay(
       if (active && pickMode && hoveredEl) updateHoverBox(hoveredEl);
     });
   };
-  window.addEventListener("scroll", scheduleReposition, { capture: true, passive: true });
-  window.addEventListener("resize", scheduleReposition, { passive: true });
+  onWindow("scroll", scheduleReposition, { capture: true, passive: true });
+  onWindow("resize", scheduleReposition, { passive: true });
 
-  function connectSSE() {
-    transport.subscribeEvents({
+  function connectSSE(): () => void {
+    return transport.subscribeEvents({
       onOpen: () => {
         connected = true;
         renderStatus();
@@ -600,7 +575,9 @@ export function mountOverlay(
           if (!inFlightBatches.delete(event.cueId)) {
             earlyCueDones.add(event.cueId);
           }
-          showToast(`${event.agent} finished in ${(event.durationMs / 1000).toFixed(1)}s ✓`);
+          feedback.flashLauncherDone(
+            `${event.agent} finished in ${(event.durationMs / 1000).toFixed(1)}s ✓`
+          );
         } else if (event.type === "cue:error") {
           const failed = inFlightBatches.get(event.cueId);
           inFlightBatches.delete(event.cueId);
@@ -621,7 +598,7 @@ export function mountOverlay(
   renderAgentOptions();
   renderControls();
   renderStatus();
-  connectSSE();
+  const unsubscribeEvents = connectSSE();
   if (options?.startActive) {
     setActive(true);
   }
@@ -630,5 +607,21 @@ export function mountOverlay(
     togglePickMode: () => setActive(!active),
     setActive,
     isActive: () => active,
+    setHideLauncherWhenIdle: (next: boolean) => {
+      hideLauncherWhenIdle = next;
+      renderControls();
+    },
+    destroy: () => {
+      feedback.dispose();
+      unsubscribeEvents();
+      for (const cleanup of windowCleanups) cleanup();
+      windowCleanups.length = 0;
+      const wasActive = active;
+      active = false;
+      pickMode = false;
+      document.documentElement.style.cursor = "";
+      host.remove();
+      if (wasActive) onActiveChange?.(false);
+    },
   };
 }
