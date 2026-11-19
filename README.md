@@ -2,8 +2,6 @@
 
 **Cue the Agent.** Pick one or more DOM elements in the browser, jot down quick UI edits, and push the batch straight to your local Agent CLI (`agy`, `claude`, `cursor-agent`, `codex`, `pi`) so it edits your code immediately.
 
-**[Live Website & Interactive Sandbox (agentcue.yuler.dev)](https://agentcue.yuler.dev)** · **[中文文档](https://agentcue.yuler.dev/zh/)** · **[GitHub Repository](https://github.com/yuler/agentcue)**
-
 ## Why
 
 Terminal coding agents cannot see your rendered page. Explaining visual tweaks in prose ("move the second button on the left 8px right and match the header font size") is slow and imprecise.
