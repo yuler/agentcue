@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>agentcue Extension Settings</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --bg-subtle: #f8fafc;
+        --text: #0f172a;
+        --text-muted: #64748b;
+        --border: #e2e8f0;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --ok: #10b981;
+        --err: #ef4444;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #111113;
+          --bg-subtle: #18181c;
+          --text: #f8fafc;
+          --text-muted: #94a3b8;
+          --border: #27272a;
+          --accent: #3b82f6;
+          --accent-hover: #2563eb;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+        min-width: 420px;
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 500;
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+      }
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-muted);
+      }
+      .status-pill.online .status-dot {
+        background: var(--ok);
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+      }
+      .status-pill.offline .status-dot {
+        background: var(--err);
+      }
+      .field {
+        margin-bottom: 14px;
+      }
+      label.field-label {
+        display: block;
+        font-weight: 600;
+        font-size: 12px;
+        margin-bottom: 5px;
+      }
+      .hint {
+        color: var(--text-muted);
+        font-size: 11.5px;
+        margin-top: 4px;
+      }
+      .input-row {
+        display: flex;
+        gap: 6px;
+      }
+      input[type="url"],
+      input[type="text"] {
+        flex: 1;
+        padding: 7px 10px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: var(--bg-subtle);
+        color: var(--text);
+        font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        outline: none;
+      }
+      input[type="text"]:focus {
+        border-color: var(--accent);
+      }
+      button {
+        padding: 7px 12px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: var(--bg-subtle);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.primary:hover {
+        background: var(--accent-hover);
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        margin-bottom: 14px;
+      }
+      .toggle-row input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+      .bridge-meta {
+        padding: 9px 11px;
+        border-radius: 8px;
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        font-size: 11.5px;
+        color: var(--text-muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .bridge-meta strong {
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="brand">
+        <img src="./icons/icon-32.png" alt="" width="20" height="20" />
+        <span>agentcue Extension</span>
+      </div>
+      <div class="status-pill" id="bridge-status-pill">
+        <span class="status-dot"></span>
+        <span id="bridge-status-text">Checking…</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="bridge-origin">Local Bridge Origin</label>
+      <div class="input-row">
+        <input
+          type="text"
+          id="bridge-origin"
+          placeholder="http://localhost:4318"
+          spellcheck="false"
+        />
+        <button type="button" id="reset-origin-btn">Default</button>
+        <button type="button" class="primary" id="save-btn">Save</button>
+      </div>
+      <div class="hint">
+        Start the local bridge with <code>npx agentcue</code> in your project workspace.
+      </div>
+    </div>
+
+    <label class="toggle-row" for="auto-mount-toggle">
+      <div>
+        <div style="font-weight: 600; font-size: 12.5px">
+          Auto-mount ✦ on localhost / 127.0.0.1
+        </div>
+        <div class="hint" style="margin-top: 2px">
+          Automatically show the collapsed ✦ launcher on local dev pages (skips pages already using <code>agentcue/vite</code>).
+        </div>
+      </div>
+      <input type="checkbox" id="auto-mount-toggle" checked />
+    </label>
+
+    <div class="bridge-meta" id="bridge-details">
+      Click the toolbar icon or press <strong>Cmd/Ctrl + Shift + F</strong> on any page to enter Pick Mode.
+    </div>
+
+    <script type="module" src="./options.js"></script>
+  </body>
+</html>

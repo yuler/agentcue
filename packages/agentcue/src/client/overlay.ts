@@ -1,24 +1,27 @@
-// Shadow DOM template and coordinate helpers live in ./dom.ts
+// Shadow DOM template and coordinate helpers live in ./dom.ts; bridge transport lives in ./transport.ts
 import {
   buildCuePayload,
-  clamp,
   computeStatusView,
+  createBrowserOverlayStateStore,
   createOverlayDom,
+  createPinFromPoint,
   ICON_EYE,
   ICON_EYE_OFF,
   ICON_PAUSE,
   ICON_PICK,
   isMacPlatform,
   isTypingInField,
-  loadActiveSessions,
   positionPopoverEl,
   renderAgentMenuDom,
   renderHoverElements,
-  saveActiveSessions,
   syncBadgeDom,
   type ActivePin,
 } from "./dom.ts";
-import { extractPinContext } from "./extract.ts";
+import {
+  createHttpBridgeTransport,
+  type MountOverlayOptions,
+  type OverlayInstance,
+} from "./transport.ts";
 import { formatCuePrompt } from "../shared/prompt.ts";
 import {
   SUPPORTED_AGENTS,
@@ -27,14 +30,22 @@ import {
   type ServerEvent,
 } from "../shared/types.ts";
 
-const STORAGE_AGENT_KEY = "agentcue:selected-agent";
+export type { MountOverlayOptions, OverlayInstance };
 
-export function mountOverlay(serverOrigin: string): { togglePickMode: () => void } {
+export function mountOverlay(
+  serverOrigin: string,
+  options?: MountOverlayOptions
+): OverlayInstance {
+  const transport = options?.transport ?? createHttpBridgeTransport(serverOrigin);
+  const stateStore = options?.stateStore ?? createBrowserOverlayStateStore();
+  const requireTrustedSend = options?.requireTrustedSend ?? false;
+  const resolveFrameworkHints = options?.resolveFrameworkHints;
   const isMac = isMacPlatform();
   const modEnterLabel = isMac ? "⌘↵" : "Ctrl+↵";
   const activateKeyLabel = isMac ? "⌘⇧F" : "Ctrl+Shift+F";
   const {
     host,
+    shadow,
     hoverBox,
     hoverTag,
     pinsLayer,
@@ -64,7 +75,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
     sendBtn,
     sendCount,
     collapseBtn,
-  } = createOverlayDom(modEnterLabel, activateKeyLabel);
+  } = createOverlayDom(modEnterLabel, activateKeyLabel, options?.shadowMode ?? "open");
 
   let active = false;
   let pickMode = false;
@@ -73,9 +84,9 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
   let agentMenuOpen = false;
   let availableAgents: AgentId[] = [...SUPPORTED_AGENTS];
   let selectedAgent: AgentId =
-    (localStorage.getItem(STORAGE_AGENT_KEY) as AgentId) || "agy";
+    (stateStore.getSelectedAgent() as AgentId) || "agy";
   if (!SUPPORTED_AGENTS.includes(selectedAgent)) selectedAgent = "agy";
-  const activeSessions = loadActiveSessions();
+  const activeSessions = stateStore.loadActiveSessions();
 
   let serverState: DispatcherState | null = null;
   let pins: ActivePin[] = [];
@@ -109,7 +120,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
 
   function selectAgent(agent: AgentId, closeMenu = true) {
     selectedAgent = agent;
-    localStorage.setItem(STORAGE_AGENT_KEY, selectedAgent);
+    stateStore.setSelectedAgent(selectedAgent);
     renderAgentOptions();
     renderControls();
     renderStatus();
@@ -124,7 +135,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
       return;
     }
     activeSessions.delete(selectedAgent);
-    saveActiveSessions(activeSessions);
+    stateStore.saveActiveSessions(activeSessions);
     renderControls();
     showToast(`Session reset · Next Cue starts a new ${selectedAgent} session`);
   }
@@ -208,7 +219,13 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
 
   function updateHoverBox(el: Element | null) {
     hoveredEl = el;
-    renderHoverElements(hoverBox, hoverTag, el, active && pickMode && activePinId === null);
+    renderHoverElements(
+      hoverBox,
+      hoverTag,
+      el,
+      active && pickMode && activePinId === null,
+      resolveFrameworkHints
+    );
   }
 
   function openPopover(pinId: string) {
@@ -312,7 +329,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
   function restoreFailedBatch(batch: ActivePin[], reason: string, wasFirstInSession = false) {
     if (wasFirstInSession) {
       activeSessions.delete(selectedAgent);
-      saveActiveSessions(activeSessions);
+      stateStore.saveActiveSessions(activeSessions);
     }
     const existingIds = new Set(pins.map((p) => p.id));
     for (const item of batch) {
@@ -323,7 +340,8 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
     showToast(`Cue failed — Pins restored: ${reason}`, true, 6500);
   }
 
-  async function dispatchCue() {
+  async function dispatchCue(triggerEvent?: Event) {
+    if (requireTrustedSend && !triggerEvent?.isTrusted) return;
     const ready = gatherReadyPins();
     if (ready.length === 0) return;
     if (!connected) {
@@ -334,7 +352,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
     const continueSession = activeSessions.has(selectedAgent);
     const wasFirstInSession = !continueSession;
     activeSessions.add(selectedAgent);
-    saveActiveSessions(activeSessions);
+    stateStore.saveActiveSessions(activeSessions);
 
     const payload = buildCuePayload(selectedAgent, continueSession, ready);
     const snapshot = [...ready];
@@ -343,14 +361,9 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
     renderPins();
 
     try {
-      const res = await fetch(`${serverOrigin}/api/cue`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json()) as { cueId?: string; error?: string; queuePosition?: number };
-      if (!res.ok || !data.cueId) {
-        restoreFailedBatch(snapshot, data.error || `HTTP ${res.status}`, wasFirstInSession);
+      const data = await transport.sendCue(payload);
+      if (!data.ok || !data.cueId) {
+        restoreFailedBatch(snapshot, data.error || `HTTP ${data.status}`, wasFirstInSession);
         return;
       }
       if (earlyCueErrors.has(data.cueId)) {
@@ -381,14 +394,14 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
   hideBtn.addEventListener("click", () => toggleMarkers());
   copyBtn.addEventListener("click", () => void copyMarkdown());
   clearBtn.addEventListener("click", () => clearAllPins());
-  sendBtn.addEventListener("click", () => void dispatchCue());
+  sendBtn.addEventListener("click", (e) => void dispatchCue(e));
 
   popInput.addEventListener("input", () => renderControls());
   popInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       e.stopPropagation();
-      void dispatchCue();
+      void dispatchCue(e);
       return;
     }
     if (e.key === "Enter" && !e.shiftKey) {
@@ -404,7 +417,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
     }
   });
   popSave.addEventListener("click", () => closePopover(true));
-  popSend.addEventListener("click", () => void dispatchCue());
+  popSend.addEventListener("click", (e) => void dispatchCue(e));
   popDelete.addEventListener("click", () => {
     if (!activePinId) return;
     pins = pins.filter((p) => p.id !== activePinId);
@@ -436,11 +449,22 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
     { passive: true }
   );
 
+  shadow.addEventListener("pointerdown", (e) => {
+    if (
+      agentMenuOpen &&
+      !e.composedPath().includes(agentMenu) &&
+      !e.composedPath().includes(agentBtn)
+    ) {
+      setAgentMenuOpen(false);
+    }
+  });
+
   for (const evtName of ["pointerdown", "mousedown", "mouseup", "click"] as const) {
     window.addEventListener(
       evtName,
       (e) => {
-        if (agentMenuOpen && evtName === "pointerdown" && !e.composedPath().includes(agentMenu) && !e.composedPath().includes(agentBtn)) {
+        if (requireTrustedSend && !e.isTrusted) return;
+        if (agentMenuOpen && evtName === "pointerdown" && !isOverlayEvent(e)) {
           setAgentMenuOpen(false);
         }
         if (!active || !pickMode || isOverlayEvent(e)) return;
@@ -453,21 +477,13 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
           closePopover(true);
         }
         const mouseEvt = e as MouseEvent;
-        const raw = document.elementFromPoint(mouseEvt.clientX, mouseEvt.clientY);
-        const target = raw === document.documentElement ? document.body || raw : raw;
-        if (!target || target === host) return;
-
-        const rect = target.getBoundingClientRect();
-        const relX = rect.width > 0 ? clamp((mouseEvt.clientX - rect.left) / rect.width, 0.1, 0.9) : 0.5;
-        const relY = rect.height > 0 ? clamp((mouseEvt.clientY - rect.top) / rect.height, 0.1, 0.9) : 0.5;
-        const newPin: ActivePin = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          el: target,
-          relX,
-          relY,
-          note: "",
-          context: extractPinContext(target),
-        };
+        const newPin = createPinFromPoint(
+          mouseEvt.clientX,
+          mouseEvt.clientY,
+          host,
+          resolveFrameworkHints
+        );
+        if (!newPin) return;
         pins.push(newPin);
         openPopover(newPin.id);
       },
@@ -478,6 +494,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
   window.addEventListener(
     "keydown",
     (e) => {
+      if (requireTrustedSend && !e.isTrusted) return;
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyF") {
         e.preventDefault();
         e.stopPropagation();
@@ -490,7 +507,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
         if (activePinId !== null || pins.some((p) => p.note.trim().length > 0)) {
           e.preventDefault();
           e.stopPropagation();
-          void dispatchCue();
+          void dispatchCue(e);
         }
         return;
       }
@@ -533,7 +550,7 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
           resetCurrentSession();
         } else if (e.code === "KeyS" && pins.some((p) => p.note.trim().length > 0)) {
           e.preventDefault();
-          void dispatchCue();
+          void dispatchCue(e);
         } else if (e.code === "KeyC" && pins.some((p) => p.note.trim().length > 0)) {
           e.preventDefault();
           void copyMarkdown();
@@ -563,19 +580,17 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
   window.addEventListener("resize", scheduleReposition, { passive: true });
 
   function connectSSE() {
-    const es = new EventSource(`${serverOrigin}/api/events`);
-    es.onopen = () => {
-      connected = true;
-      renderStatus();
-    };
-    es.onmessage = (msg) => {
-      try {
-        const event = JSON.parse(msg.data) as ServerEvent;
+    transport.subscribeEvents({
+      onOpen: () => {
+        connected = true;
+        renderStatus();
+      },
+      onEvent: (event: ServerEvent) => {
         if (event.type === "state") {
           serverState = event.state;
           if (event.state.agents.length > 0) {
             availableAgents = event.state.agents;
-            if (!localStorage.getItem(STORAGE_AGENT_KEY) && event.state.defaultAgent) {
+            if (!stateStore.getSelectedAgent() && event.state.defaultAgent) {
               selectedAgent = event.state.defaultAgent;
             }
             renderAgentOptions();
@@ -595,22 +610,25 @@ export function mountOverlay(serverOrigin: string): { togglePickMode: () => void
             earlyCueErrors.set(event.cueId, event.error);
           }
         }
-      } catch {
-        // ignore malformed frames
-      }
-    };
-    es.onerror = () => {
-      connected = false;
-      renderStatus();
-    };
+      },
+      onError: () => {
+        connected = false;
+        renderStatus();
+      },
+    });
   }
 
   renderAgentOptions();
   renderControls();
   renderStatus();
   connectSSE();
+  if (options?.startActive) {
+    setActive(true);
+  }
 
   return {
     togglePickMode: () => setActive(!active),
+    setActive,
+    isActive: () => active,
   };
 }

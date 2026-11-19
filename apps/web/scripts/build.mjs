@@ -14,9 +14,14 @@ copyFileSync(join(webRoot, "src/styles.css"), join(distDir, "styles.css"));
 copyFileSync(join(webRoot, "../../logo.svg"), join(distDir, "logo.svg"));
 writeFileSync(join(distDir, "CNAME"), "agentcue.yuler.dev\n", "utf-8");
 
-// Copy real compiled client.js from packages/agentcue/dist
+// Copy real compiled client.js from packages/agentcue/dist and extension zip
 const clientSrc = join(webRoot, "../../packages/agentcue/dist/client.js");
 copyFileSync(clientSrc, join(distDir, "client.js"));
+const extZipSrc = join(
+  webRoot,
+  "../../packages/extension/dist/agentcue-extension.zip",
+);
+copyFileSync(extZipSrc, join(distDir, "agentcue-extension.zip"));
 
 // Build main.ts → main.js
 execFileSync(
@@ -43,6 +48,10 @@ html = html.replace(/src="\.\/logo\.svg"/g, 'src="../logo.svg"');
 html = html.replace(/href="\.\/styles\.css"/g, 'href="../styles.css"');
 html = html.replace(/src="\.\/main\.js"/g, 'src="../main.js"');
 html = html.replace(/src="\.\/client\.js"/g, 'src="../client.js"');
+html = html.replace(
+  /href="\.\/agentcue-extension\.zip"/g,
+  'href="../agentcue-extension.zip"',
+);
 writeFileSync(join(zhDir, "index.html"), html, "utf-8");
 
 console.log("Built apps/web/dist (index.html, zh/index.html, styles.css, main.js, client.js)");

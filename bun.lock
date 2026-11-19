@@ -35,7 +35,7 @@
     },
     "packages/agentcue": {
       "name": "agentcue",
-      "version": "0.0.1",
+      "version": "0.0.0",
       "bin": {
         "agentcue": "./dist/cli.js",
       },
@@ -50,11 +50,21 @@
         "vite",
       ],
     },
+    "packages/extension": {
+      "name": "@agentcue/extension",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/node": "^22.0.0",
+        "typescript": "^5.8.0",
+      },
+    },
   },
   "packages": {
     "@agentcue/example-html": ["@agentcue/example-html@workspace:examples/html"],
 
     "@agentcue/example-vite-react": ["@agentcue/example-vite-react@workspace:examples/vite-react"],
+
+    "@agentcue/extension": ["@agentcue/extension@workspace:packages/extension"],
 
     "@agentcue/web": ["@agentcue/web@workspace:apps/web"],
 

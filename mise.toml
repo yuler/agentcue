@@ -12,9 +12,10 @@ description = "Install and link workspace dependencies"
 run = "bun install"
 
 [tasks.dev]
-description = "Start all dev servers (agentcue, web, and all examples)"
+description = "Start all dev servers (agentcue, extension, web, and all examples)"
 depends = [
   "agentcue:dev",
+  "extension:dev",
   "web:dev",
   "example:html:dev",
   "example:vite-react:dev",
@@ -24,13 +25,14 @@ depends = [
 description = "Build all packages, apps, and examples"
 depends = [
   "agentcue:build",
+  "extension:build",
   "web:build",
   "example:vite-react:build",
 ]
 
 [tasks.test]
 description = "Run workspace test suite"
-depends = ["agentcue:test"]
+depends = ["agentcue:test", "extension:test"]
 
 [tasks.check]
 description = "Build all targets and run test suite"
@@ -66,13 +68,31 @@ run = "bun packages/agentcue/dist/cli.js"
 [tasks."agentcue:test"]
 description = "Run agentcue unit and server integration tests"
 depends = ["agentcue:build"]
-run = "bun test"
+run = "bun test packages/agentcue"
+
+# ─── Package: extension ──────────────────────────────────────────────────────
+
+[tasks."extension:build"]
+description = "Build @agentcue/extension MV3 unpacked bundle and zip archive"
+dir = "packages/extension"
+run = "bun scripts/build.mjs"
+
+[tasks."extension:dev"]
+description = "Watch and rebuild @agentcue/extension on source changes"
+depends = ["extension:build"]
+dir = "packages/extension"
+run = "bun scripts/build.mjs --watch --no-initial"
+
+[tasks."extension:test"]
+description = "Run @agentcue/extension protocol, security boundary, and build artifact tests"
+depends = ["extension:build"]
+run = "bun test packages/extension"
 
 # ─── App: web ────────────────────────────────────────────────────────────────
 
 [tasks."web:build"]
 description = "Build @agentcue/web showcase"
-depends = ["agentcue:build:client"]
+depends = ["agentcue:build:client", "extension:build"]
 dir = "apps/web"
 run = "bun scripts/build.mjs"
 

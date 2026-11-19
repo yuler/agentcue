@@ -1,5 +1,5 @@
 import { OVERLAY_CSS } from "./styles.ts";
-import { extractPinContext } from "./extract.ts";
+import { extractPinContext, type FrameworkHints } from "./extract.ts";
 import type { AgentId, CuePayload, DispatcherState, PinContext } from "../shared/types.ts";
 
 export function computeStatusView(
@@ -37,6 +37,26 @@ export interface ActivePin {
   context: PinContext;
 }
 
+export function createPinFromPoint(
+  clientX: number,
+  clientY: number,
+  host: Element,
+  resolveFrameworkHints?: (el: Element) => FrameworkHints | undefined
+): ActivePin | null {
+  const raw = document.elementFromPoint(clientX, clientY);
+  const target = raw === document.documentElement ? document.body || raw : raw;
+  if (!target || target === host) return null;
+  const rect = target.getBoundingClientRect();
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    el: target,
+    relX: rect.width > 0 ? clamp((clientX - rect.left) / rect.width, 0.1, 0.9) : 0.5,
+    relY: rect.height > 0 ? clamp((clientY - rect.top) / rect.height, 0.1, 0.9) : 0.5,
+    note: "",
+    context: extractPinContext(target, resolveFrameworkHints),
+  };
+}
+
 export function buildCuePayload(
   agent: AgentId,
   continueSession: boolean,
@@ -55,7 +75,15 @@ export function buildCuePayload(
   };
 }
 
+const STORAGE_AGENT_KEY = "agentcue:selected-agent";
 const STORAGE_SESSIONS_KEY = "agentcue:active-sessions";
+
+export interface OverlayStateStore {
+  getSelectedAgent: () => string | null;
+  setSelectedAgent: (agent: AgentId) => void;
+  loadActiveSessions: () => Set<AgentId>;
+  saveActiveSessions: (sessions: Set<AgentId>) => void;
+}
 
 export function loadActiveSessions(): Set<AgentId> {
   try {
@@ -72,6 +100,27 @@ export function saveActiveSessions(sessions: Set<AgentId>) {
   } catch {
     // ignore storage errors
   }
+}
+
+export function createBrowserOverlayStateStore(): OverlayStateStore {
+  return {
+    getSelectedAgent: () => {
+      try {
+        return localStorage.getItem(STORAGE_AGENT_KEY);
+      } catch {
+        return null;
+      }
+    },
+    setSelectedAgent: (agent: AgentId) => {
+      try {
+        localStorage.setItem(STORAGE_AGENT_KEY, agent);
+      } catch {
+        // ignore storage errors
+      }
+    },
+    loadActiveSessions,
+    saveActiveSessions,
+  };
 }
 
 export function syncBadgeDom(
@@ -194,7 +243,8 @@ export function renderHoverElements(
   hoverBox: HTMLDivElement,
   hoverTag: HTMLDivElement,
   el: Element | null,
-  enabled: boolean
+  enabled: boolean,
+  resolveFrameworkHints?: (el: Element) => FrameworkHints | undefined
 ) {
   if (!enabled || !el) {
     hoverBox.classList.remove("visible");
@@ -223,7 +273,7 @@ export function renderHoverElements(
   hoverBox.style.height = `${Math.max(0, boxBottom - boxTop)}px`;
   hoverBox.classList.add("visible");
 
-  const ctx = extractPinContext(el);
+  const ctx = extractPinContext(el, resolveFrameworkHints);
   const shortTag = `${ctx.tagName}${el.id ? `#${el.id}` : el.classList[0] ? `.${el.classList[0]}` : ""} · ${Math.round(rect.width)}×${Math.round(rect.height)}`;
   const hint = ctx.sourceHint || ctx.componentStack || "";
   hoverTag.innerHTML = "";
@@ -252,9 +302,13 @@ export const ICON_PICK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 export const ICON_EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
 export const ICON_EYE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.7 5.1A11 11 0 0 1 12 5c6.4 0 10 7 10 7a13.2 13.2 0 0 1-1.7 2.7"/><path d="M6.6 6.6C4 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`;
 
-export function createOverlayDom(modEnterLabel: string, activateKeyLabel: string) {
+export function createOverlayDom(
+  modEnterLabel: string,
+  activateKeyLabel: string,
+  shadowMode: "open" | "closed" = "open"
+) {
   const host = document.createElement("agentcue-root");
-  const shadow = host.attachShadow({ mode: "open" });
+  const shadow = host.attachShadow({ mode: shadowMode });
 
   shadow.innerHTML = `
     <style>${OVERLAY_CSS}</style>
@@ -334,6 +388,7 @@ export function createOverlayDom(modEnterLabel: string, activateKeyLabel: string
 
   return {
     host,
+    shadow,
     hoverBox: $<HTMLDivElement>("hoverBox"),
     hoverTag: $<HTMLDivElement>("hoverTag"),
     pinsLayer: $<HTMLDivElement>("pinsLayer"),

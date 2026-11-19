@@ -42,8 +42,20 @@ jobs:
               - 'mise.toml'
               - '.github/workflows/ci.yml'
               - '.github/actions/**'
+            extension:
+              - 'packages/extension/**'
+              - 'packages/agentcue/src/client/**'
+              - 'packages/agentcue/src/shared/**'
+              - 'packages/agentcue/src/server/**'
+              - 'package.json'
+              - 'bun.lock'
+              - 'tsconfig.base.json'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
             web:
               - 'apps/web/**'
+              - 'packages/extension/**'
               - 'packages/agentcue/src/client/**'
               - 'packages/agentcue/src/shared/**'
               - 'packages/agentcue/scripts/build.mjs'
@@ -75,6 +87,7 @@ jobs:
       - name: Setup toolchain
         if: >-
           steps.changes.outputs.agentcue == 'true' ||
+          steps.changes.outputs.extension == 'true' ||
           steps.changes.outputs.web == 'true' ||
           steps.changes.outputs.example_vite_react == 'true'
         uses: ./.github/actions/setup
@@ -82,17 +95,20 @@ jobs:
           install: >-
             ${{
               steps.changes.outputs.agentcue == 'true' ||
+              steps.changes.outputs.extension == 'true' ||
               steps.changes.outputs.example_vite_react == 'true'
             }}
 
       - name: Build and test affected targets
         if: >-
           steps.changes.outputs.agentcue == 'true' ||
+          steps.changes.outputs.extension == 'true' ||
           steps.changes.outputs.web == 'true' ||
           steps.changes.outputs.example_vite_react == 'true'
         run: |
           tasks=()
           [ "${{ steps.changes.outputs.agentcue }}" = "true" ] && tasks+=(agentcue:test)
+          [ "${{ steps.changes.outputs.extension }}" = "true" ] && tasks+=(extension:test)
           [ "${{ steps.changes.outputs.web }}" = "true" ] && tasks+=(web:build)
           [ "${{ steps.changes.outputs.example_vite_react }}" = "true" ] && tasks+=(example:vite-react:build)
 
