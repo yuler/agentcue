@@ -276,6 +276,13 @@ code {
 
 .qs-panel.active { display: flex; }
 
+.qs-note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted-color);
+}
+
 .code-block {
   display: flex;
   align-items: center;

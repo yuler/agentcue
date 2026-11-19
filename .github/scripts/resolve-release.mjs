@@ -42,6 +42,12 @@ export function isReleasePath(file) {
     file.startsWith("packages/agentcue/scripts/") ||
     file === "packages/agentcue/package.json" ||
     /^packages\/agentcue\/tsconfig(\.[^/]+)?\.json$/.test(file) ||
+    file.startsWith("packages/extension/src/") ||
+    file.startsWith("packages/extension/scripts/") ||
+    file.startsWith("packages/extension/icons/") ||
+    file === "packages/extension/manifest.json" ||
+    file === "packages/extension/package.json" ||
+    /^packages\/extension\/tsconfig(\.[^/]+)?\.json$/.test(file) ||
     file === "examples/html/index.html" ||
     file === "README.md" ||
     file === "LICENSE" ||

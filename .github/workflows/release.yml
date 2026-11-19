@@ -61,6 +61,12 @@ jobs:
         if: steps.version.outputs.skip != 'true'
         run: mise run agentcue:test
 
+      - name: Build and test extension zip
+        if: steps.version.outputs.skip != 'true'
+        env:
+          AGENTCUE_EXTENSION_VERSION: ${{ steps.version.outputs.version }}
+        run: mise run extension:test
+
       - name: Publish to npm
         if: steps.version.outputs.skip != 'true'
         working-directory: packages/agentcue
@@ -81,11 +87,20 @@ jobs:
         run: |
           TAG="v${VERSION}"
           TARGET_SHA="$(git rev-parse HEAD)"
+          ZIP_SRC="packages/extension/dist/agentcue-extension.zip"
+          ZIP_VERSIONED="packages/extension/dist/agentcue-extension-v${VERSION}.zip"
+          if [ ! -f "$ZIP_SRC" ]; then
+            echo "::error::Missing extension zip at $ZIP_SRC"
+            exit 1
+          fi
+          cp "$ZIP_SRC" "$ZIP_VERSIONED"
+
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "GitHub Release $TAG already exists."
+            echo "GitHub Release $TAG already exists; uploading assets."
           else
             gh release create "$TAG" \
               --target "$TARGET_SHA" \
               --title "$TAG" \
               --generate-notes
           fi
+          gh release upload "$TAG" "$ZIP_SRC" "$ZIP_VERSIONED" --clobber
