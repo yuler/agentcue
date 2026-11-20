@@ -12,6 +12,7 @@ import {
   DURATION,
   REST_TIME,
   STEP_STARTS,
+  STEP_STILLS,
   stepCopy,
   type Timeline,
 } from "./timeline.ts";
@@ -27,7 +28,7 @@ export function initIntro() {
 
   const reducedQuery = matchMedia("(prefers-reduced-motion: reduce)");
   let fit = refs.frame.clientWidth / WORLD_W || 1;
-  let t = 0;
+  let t = STEP_STARTS[0];
   let inView = false;
   let hovering = false;
   let timeline: Timeline = createTimeline(refs, measureAnchors(refs));
@@ -87,8 +88,9 @@ export function initIntro() {
 
   refs.steps.forEach((btn, i) => {
     btn.addEventListener("click", () => {
-      t = STEP_STARTS[i];
+      t = shouldPlay() ? STEP_STARTS[i] : STEP_STILLS[i];
       refs.root.dataset.jumped = "1";
+      last = 0;
       render();
     });
   });

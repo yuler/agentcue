@@ -62,8 +62,11 @@ export function stepCopy(mac: boolean): StepCopy[] {
   ];
 }
 
-/** Start time of each step; clicking a step jumps here. */
-export const STEP_STARTS = [0, 4.9, 7.0, 8.75];
+/** Start time of each step; clicking a step while playing jumps here. */
+export const STEP_STARTS = [0.35, 4.9, 7.0, 8.75];
+
+/** Representative static frame for each step (used under reduced motion or while paused). */
+export const STEP_STILLS = [3.95, 6.65, 8.15, REST_TIME];
 
 const NOTE = { en: "Make it green", zh: "改成绿色" };
 const ARIA = {
