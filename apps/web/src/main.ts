@@ -1,4 +1,5 @@
 import { initLangToggle } from "./i18n.ts";
+import { initIntro } from "./intro/index.ts";
 import { initSandbox, resetSandboxTargets } from "./sandbox.ts";
 import { initThemeToggle } from "./theme.ts";
 
@@ -55,6 +56,7 @@ function initQuickstartTabs() {
 function bootstrap() {
   initThemeToggle();
   initSandbox();
+  initIntro();
   initLangToggle();
   initCopyButtons();
   initPickToggle();
