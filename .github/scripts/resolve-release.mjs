@@ -49,6 +49,7 @@ export function isReleasePath(file) {
     file === "packages/extension/package.json" ||
     /^packages\/extension\/tsconfig(\.[^/]+)?\.json$/.test(file) ||
     file === "examples/html/index.html" ||
+    file === "scripts/resolve-version.mjs" ||
     file === "README.md" ||
     file === "LICENSE" ||
     file === "logo.svg" ||
