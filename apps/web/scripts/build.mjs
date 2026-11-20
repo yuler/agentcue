@@ -11,6 +11,7 @@ mkdirSync(zhDir, { recursive: true });
 // Copy index.html, styles.css, logo.svg, and CNAME
 copyFileSync(join(webRoot, "index.html"), join(distDir, "index.html"));
 copyFileSync(join(webRoot, "src/styles.css"), join(distDir, "styles.css"));
+copyFileSync(join(webRoot, "src/intro.css"), join(distDir, "intro.css"));
 copyFileSync(join(webRoot, "../../logo.svg"), join(distDir, "logo.svg"));
 writeFileSync(join(distDir, "CNAME"), "agentcue.yuler.dev\n", "utf-8");
 
@@ -41,8 +42,9 @@ html = html.replace('<html lang="en">', '<html lang="zh-CN">');
 html = html.replace(/href="\.\/logo\.svg"/g, 'href="../logo.svg"');
 html = html.replace(/src="\.\/logo\.svg"/g, 'src="../logo.svg"');
 html = html.replace(/href="\.\/styles\.css"/g, 'href="../styles.css"');
+html = html.replace(/href="\.\/intro\.css"/g, 'href="../intro.css"');
 html = html.replace(/src="\.\/main\.js"/g, 'src="../main.js"');
 html = html.replace(/src="\.\/client\.js"/g, 'src="../client.js"');
 writeFileSync(join(zhDir, "index.html"), html, "utf-8");
 
-console.log("Built apps/web/dist (index.html, zh/index.html, styles.css, main.js, client.js)");
+console.log("Built apps/web/dist (index.html, zh/index.html, styles.css, intro.css, main.js, client.js)");
