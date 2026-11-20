@@ -114,15 +114,6 @@ function buildAll({ skipTypes = false, clientOnly = false, quiet = false } = {})
   }
   chmodSync(cliOut, 0o755);
 
-  const demoSrc = join(repoRoot, "examples", "html", "index.html");
-  if (existsSync(demoSrc)) {
-    const demoHtml = readFileSync(demoSrc, "utf-8").replace(
-      /\{\{VERSION\}\}/g,
-      version
-    );
-    writeFileSync(join(distDir, "demo.html"), demoHtml, "utf-8");
-  }
-
   const RAW_BASE = "https://raw.githubusercontent.com/yuler/agentcue/main";
   const BLOB_BASE = "https://github.com/yuler/agentcue/blob/main";
 
@@ -144,7 +135,7 @@ function buildAll({ skipTypes = false, clientOnly = false, quiet = false } = {})
 
   if (!quiet) {
     console.log(
-      "Built dist/client.js, dist/index.js, dist/vite.js, dist/cli.js, and dist/demo.html"
+      "Built dist/client.js, dist/index.js, dist/vite.js, and dist/cli.js"
     );
   }
 }

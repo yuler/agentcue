@@ -46,7 +46,7 @@ server.on("listening", () => {
   const addr = server.address();
   const bound = addr && typeof addr === "object" ? addr.port : startPort;
   console.log(
-    `  \x1b[36m➜\x1b[0m  \x1b[1mWeb       \x1b[0m \x1b[36mhttp://localhost:${bound}\x1b[0m  \x1b[90m(zh: http://localhost:${bound}/zh)\x1b[0m`
+    `  \x1b[36m➜\x1b[0m  \x1b[1mWeb       \x1b[0m \x1b[36mhttp://localhost:${bound}\x1b[0m`
   );
 });
 

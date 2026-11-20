@@ -11,7 +11,7 @@ Guidelines for coding agents for this repo
 - **Commit & PR title format**: `emoji [scope] The main change` — example: `✨ [core] Adopt shared account slug tenancy for personal and team`. PR title follows the exact same format.
 - **No agent trailers**: Do not add agent trailers to commits (`Made-with:`, `Co-Authored-By: Claude`, Cursor, etc.). Message body only when it adds real context.
 - **Auto-PR on completion**: Once a feature or bugfix is implemented and verified (checks/tests pass), commit, push the branch, create a PR, and remove the worktree automatically unless the user explicitly says not to.
-- **Automated trunk release & versioning**: Merge/push to `main` triggers CI to compute the next semver, publish packages, create the `v*` git tag, and open the GitHub Release. Local package manifests (Node.js, Go, Rust) keep a placeholder version (`0.0.0`); CI injects the real release version at package time. All displayed/packaged versions (CLI, built-in demo, web showcase, browser extension) must follow the latest `v*` git tag (or CI release version) via `scripts/resolve-version.mjs` — never hardcode version numbers in source files.
+- **Automated trunk release & versioning**: Merge/push to `main` triggers CI to compute the next semver, publish packages, create the `v*` git tag, and open the GitHub Release. Local package manifests (Node.js, Go, Rust) keep a placeholder version (`0.0.0`); CI injects the real release version at package time. All displayed/packaged versions (CLI, examples, web showcase, browser extension) must follow the latest `v*` git tag (or CI release version) via `scripts/resolve-version.mjs` — never hardcode version numbers in source files.
 
 ### Code & Architecture
 

@@ -56,7 +56,6 @@ Then attach the overlay in the browser using any output printed in your terminal
 
 - **Script tag**: add `<script src="http://localhost:4318/client.js"></script>` to your dev HTML
 - **Bookmarklet**: run the zero-config Bookmarklet URL on any local page
-- **Built-in playground**: open `http://localhost:4318/demo` to test live edits immediately
 
 ### Browser Extension (Chrome / Edge / Arc / Brave)
 
