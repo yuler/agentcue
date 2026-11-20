@@ -2,14 +2,22 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoVersion } from "../../../scripts/resolve-version.mjs";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = join(webRoot, "../..");
 const distDir = join(webRoot, "dist");
 const zhDir = join(distDir, "zh");
 mkdirSync(zhDir, { recursive: true });
 
-// Copy index.html, styles.css, logo.svg, and CNAME
-copyFileSync(join(webRoot, "index.html"), join(distDir, "index.html"));
+const version = resolveRepoVersion(repoRoot);
+const indexHtml = readFileSync(join(webRoot, "index.html"), "utf-8").replace(
+  /\{\{VERSION\}\}/g,
+  version,
+);
+
+// Write index.html and copy styles.css, logo.svg, and CNAME
+writeFileSync(join(distDir, "index.html"), indexHtml, "utf-8");
 copyFileSync(join(webRoot, "src/styles.css"), join(distDir, "styles.css"));
 copyFileSync(join(webRoot, "../../logo.svg"), join(distDir, "logo.svg"));
 writeFileSync(join(distDir, "CNAME"), "agentcue.yuler.dev\n", "utf-8");
@@ -36,7 +44,7 @@ execFileSync(
 );
 
 // Generate zh/index.html with lang="zh-CN" and adjusted asset paths
-let html = readFileSync(join(webRoot, "index.html"), "utf-8");
+let html = indexHtml;
 html = html.replace('<html lang="en">', '<html lang="zh-CN">');
 html = html.replace(/href="\.\/logo\.svg"/g, 'href="../logo.svg"');
 html = html.replace(/src="\.\/logo\.svg"/g, 'src="../logo.svg"');

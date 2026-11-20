@@ -11,6 +11,7 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateRawSync } from "node:zlib";
+import { resolveRepoVersion } from "../../../scripts/resolve-version.mjs";
 
 const extRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(extRoot, "..", "..");
@@ -110,39 +111,12 @@ function isValidChromeManifestVersion(version) {
   return parts.some((n) => n > 0);
 }
 
-function readLatestGitTagVersion() {
-  try {
-    const out = execFileSync(
-      "git",
-      ["tag", "--list", "v*", "--sort=-v:refname"],
-      { cwd: repoRoot, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }
-    );
-    const firstTag = out
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find(Boolean);
-    if (!firstTag) return undefined;
-    const stripped = firstTag.replace(/^v/, "").split("-")[0];
-    return isValidChromeManifestVersion(stripped) ? stripped : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveManifestVersion(coreVersion, fallbackVersion) {
-  const candidates = [
-    process.env.AGENTCUE_EXTENSION_VERSION,
-    coreVersion,
-    readLatestGitTagVersion(),
-    fallbackVersion,
-    "0.0.1",
-  ];
-  for (const candidate of candidates) {
-    if (isValidChromeManifestVersion(candidate)) {
-      return candidate.trim();
-    }
-  }
-  return "0.0.1";
+function resolveManifestVersion(fallbackVersion) {
+  return resolveRepoVersion(repoRoot, {
+    extraCandidates: [process.env.AGENTCUE_EXTENSION_VERSION],
+    fallback: fallbackVersion,
+    validate: isValidChromeManifestVersion,
+  });
 }
 
 function buildAll({ skipTypes = false } = {}) {
@@ -167,14 +141,10 @@ function buildAll({ skipTypes = false } = {}) {
   }
 
   // Sync a valid non-zero MV3 version (never inherit 0.0.0 placeholder)
-  const corePkgPath = join(repoRoot, "packages", "agentcue", "package.json");
-  const corePkg = existsSync(corePkgPath)
-    ? JSON.parse(readFileSync(corePkgPath, "utf-8"))
-    : {};
   const manifest = JSON.parse(
     readFileSync(join(extRoot, "manifest.json"), "utf-8")
   );
-  manifest.version = resolveManifestVersion(corePkg.version, manifest.version);
+  manifest.version = resolveManifestVersion(manifest.version);
   writeFileSync(
     join(distDir, "manifest.json"),
     `${JSON.stringify(manifest, null, 2)}\n`,

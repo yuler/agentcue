@@ -1,6 +1,6 @@
 {
   "name": "@agentcue/example-vite-react",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "description": "Vite + React playground example using agentcue/vite.",

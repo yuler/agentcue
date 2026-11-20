@@ -11,15 +11,15 @@
     },
     "apps/web": {
       "name": "@agentcue/web",
-      "version": "0.0.1",
+      "version": "0.0.0",
     },
     "examples/html": {
       "name": "@agentcue/example-html",
-      "version": "0.0.1",
+      "version": "0.0.0",
     },
     "examples/vite-react": {
       "name": "@agentcue/example-vite-react",
-      "version": "0.0.1",
+      "version": "0.0.0",
       "dependencies": {
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
