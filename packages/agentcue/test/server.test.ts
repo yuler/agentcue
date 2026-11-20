@@ -6,6 +6,7 @@ import {
 } from "../src/server/dispatcher.ts";
 import { startServer } from "../src/server/server.ts";
 import type { CuePayload, ServerEvent } from "../src/shared/types.ts";
+import { getAgentcueVersion } from "../src/shared/version.ts";
 
 const sampleCue = (
   agent: CuePayload["agent"],
@@ -199,6 +200,30 @@ describe("Local Bridge HTTP Server & Serial Queue Seam", () => {
         body: JSON.stringify({ agent: "agy", pins: [] }),
       });
       assert.equal(res.status, 400);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("resolves non-zero version and injects it into served demo HTML", async () => {
+    const version = getAgentcueVersion();
+    assert.match(version, /^\d+\.\d+\.\d+$/);
+    assert.notEqual(version, "0.0.0");
+
+    const server = await startServer({
+      port: 0,
+      agents: ["agy"],
+      executor: async () => ({ ok: true, exitCode: 0 }),
+    });
+    try {
+      const res = await fetch(`${server.origin}/demo`);
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      assert.equal(html.includes("{{VERSION}}"), false);
+      assert.ok(
+        html.includes(`Beta v${version} Playground`),
+        `Expected demo HTML to contain Beta v${version} Playground`
+      );
     } finally {
       await server.close();
     }

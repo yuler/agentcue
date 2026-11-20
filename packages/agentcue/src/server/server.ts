@@ -14,6 +14,7 @@ import {
   sendJson,
 } from "./handler.ts";
 import type { AgentId } from "../shared/types.ts";
+import { getAgentcueVersion } from "../shared/version.ts";
 
 export interface ServerOptions {
   port?: number;
@@ -95,7 +96,10 @@ export async function startServer(
           res.end("Demo page not found.");
           return;
         }
-        let html = readFileSync(demoPath, "utf-8");
+        let html = readFileSync(demoPath, "utf-8").replace(
+          /\{\{VERSION\}\}/g,
+          getAgentcueVersion()
+        );
         const liveReloadAndClient = `
 <script src="${getOrigin()}/client.js"></script>
 <script>

@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { startServer } from "./server/server.ts";
 import { SUPPORTED_AGENTS, type AgentId } from "./shared/types.ts";
+import { getAgentcueVersion } from "./shared/version.ts";
 
 interface CliArgs {
   port: number;
@@ -8,6 +9,7 @@ interface CliArgs {
   cwd: string;
   defaultAgent?: AgentId;
   help: boolean;
+  version: boolean;
 }
 
 function parseCliArgs(argv: string[]): CliArgs {
@@ -16,11 +18,14 @@ function parseCliArgs(argv: string[]): CliArgs {
   let cwd = process.cwd();
   let defaultAgent: AgentId | undefined;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
       help = true;
+    } else if (arg === "-v" || arg === "--version") {
+      version = true;
     } else if (arg === "-p" || arg === "--port") {
       port = Number(argv[++i]);
     } else if (arg.startsWith("--port=")) {
@@ -40,7 +45,7 @@ function parseCliArgs(argv: string[]): CliArgs {
     }
   }
 
-  return { port, host, cwd, defaultAgent, help };
+  return { port, host, cwd, defaultAgent, help, version };
 }
 
 function printHelp() {
@@ -58,6 +63,7 @@ Options:
   -a, --agent <agent>  Default selected Agent Target
   -C, --cwd <dir>      Target workspace directory (default: current directory)
   --host <host>        Bind host (default: 127.0.0.1)
+  -v, --version        Show version number
   -h, --help           Show this help message
 `);
 }
@@ -66,6 +72,10 @@ async function main() {
   const args = parseCliArgs(process.argv.slice(2));
   if (args.help) {
     printHelp();
+    return;
+  }
+  if (args.version) {
+    console.log(getAgentcueVersion());
     return;
   }
 
@@ -111,7 +121,7 @@ async function main() {
     const bookmarklet = `javascript:(()=>{const s=document.createElement('script');s.src='${running.origin}/client.js?t='+Date.now();document.head.appendChild(s);})()`;
 
     console.log(`
-\x1b[1m\x1b[36m✦ agentcue\x1b[0m bridge listening on \x1b[1m${running.origin}\x1b[0m
+\x1b[1m\x1b[36m✦ agentcue\x1b[0m \x1b[90mv${getAgentcueVersion()}\x1b[0m bridge listening on \x1b[1m${running.origin}\x1b[0m
   Workspace : ${state.cwd}
   Agents    : ${agentList}
 

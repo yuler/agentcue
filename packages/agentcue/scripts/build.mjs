@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoVersion } from "../../../scripts/resolve-version.mjs";
 
 const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(pkgRoot, "..", "..");
@@ -18,6 +19,8 @@ const distDir = join(pkgRoot, "dist");
 function buildAll({ skipTypes = false, clientOnly = false, quiet = false } = {}) {
   mkdirSync(distDir, { recursive: true });
   const stdio = quiet ? ["ignore", "pipe", "pipe"] : "inherit";
+  const version = resolveRepoVersion(repoRoot);
+  const versionDefine = `__AGENTCUE_VERSION__=${JSON.stringify(version)}`;
 
   execFileSync(
     "bun",
@@ -51,6 +54,8 @@ function buildAll({ skipTypes = false, clientOnly = false, quiet = false } = {})
       "node",
       "--format",
       "esm",
+      "--define",
+      versionDefine,
     ],
     { stdio }
   );
@@ -66,6 +71,8 @@ function buildAll({ skipTypes = false, clientOnly = false, quiet = false } = {})
       "node",
       "--format",
       "esm",
+      "--define",
+      versionDefine,
     ],
     { stdio }
   );
@@ -81,6 +88,8 @@ function buildAll({ skipTypes = false, clientOnly = false, quiet = false } = {})
       "node",
       "--format",
       "esm",
+      "--define",
+      versionDefine,
     ],
     { stdio }
   );
@@ -107,7 +116,11 @@ function buildAll({ skipTypes = false, clientOnly = false, quiet = false } = {})
 
   const demoSrc = join(repoRoot, "examples", "html", "index.html");
   if (existsSync(demoSrc)) {
-    copyFileSync(demoSrc, join(distDir, "demo.html"));
+    const demoHtml = readFileSync(demoSrc, "utf-8").replace(
+      /\{\{VERSION\}\}/g,
+      version
+    );
+    writeFileSync(join(distDir, "demo.html"), demoHtml, "utf-8");
   }
 
   const RAW_BASE = "https://raw.githubusercontent.com/yuler/agentcue/main";
