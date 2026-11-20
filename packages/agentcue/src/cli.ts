@@ -110,12 +110,17 @@ async function main() {
   const state = running.dispatcher.getState();
   const agentList = SUPPORTED_AGENTS.map((a) =>
     state.agents.includes(a) ? `\x1b[32m✓ ${a}\x1b[0m` : `\x1b[90m✗ ${a}\x1b[0m`
-  ).join("   ");
+  ).join("  ");
 
-  const scriptTag = `<script src="${running.origin}/client.js"></script>`;
-  const bookmarklet = `javascript:(()=>{const s=document.createElement('script');s.src='${running.origin}/client.js?t='+Date.now();document.head.appendChild(s);})()`;
+  if (process.env.AGENTCUE_DEV === "1") {
+    console.log(
+      `  \x1b[36m➜\x1b[0m  \x1b[1mCLI       \x1b[0m \x1b[36m${running.origin}\x1b[0m  \x1b[90m(demo: ${running.origin}/demo)\x1b[0m  ·  ${agentList}`
+    );
+  } else {
+    const scriptTag = `<script src="${running.origin}/client.js"></script>`;
+    const bookmarklet = `javascript:(()=>{const s=document.createElement('script');s.src='${running.origin}/client.js?t='+Date.now();document.head.appendChild(s);})()`;
 
-  console.log(`
+    console.log(`
 \x1b[1m\x1b[36m✦ agentcue\x1b[0m \x1b[90mv${getAgentcueVersion()}\x1b[0m bridge listening on \x1b[1m${running.origin}\x1b[0m
   Workspace : ${state.cwd}
   Agents    : ${agentList}
@@ -131,6 +136,7 @@ async function main() {
 
 \x1b[90mShortcuts: Cmd/Ctrl+Shift+F activate · Enter save Pin · S (or Cmd/Ctrl+Enter) send · C copy · X clear · H hide · Esc collapse\x1b[0m
 `);
+  }
 
   const shutdown = () => {
     console.log("\nShutting down agentcue…");

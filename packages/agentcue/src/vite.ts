@@ -5,7 +5,11 @@ import {
   type AgentExecutor,
   type Dispatcher,
 } from "./server/dispatcher.ts";
-import { createBridgeHandler, resolveClientBundlePath } from "./server/handler.ts";
+import {
+  createBridgeHandler,
+  resolveClientBundlePath,
+  type BridgeHandler,
+} from "./server/handler.ts";
 import { SUPPORTED_AGENTS, type AgentId } from "./shared/types.ts";
 
 export type { AgentId, AgentExecutor, Dispatcher };
@@ -73,6 +77,7 @@ export interface AgentcueVitePlugin {
   configResolved(config: ViteResolvedConfigLike): void;
   configureServer(server: ViteDevServerLike): void;
   transformIndexHtml(): AgentcueHtmlTagDescriptor[];
+  closeBundle(): void;
 }
 
 function normalizeMountPath(viteBase: string, rawBasePath: string): string {
@@ -102,6 +107,7 @@ export function agentcue(
   const rawBasePath = options.basePath ?? "/__agentcue";
   let resolvedRoot = process.cwd();
   let mountPath = normalizeMountPath("/", rawBasePath);
+  let activeBridge: BridgeHandler | null = null;
 
   return {
     name: "vite-plugin-agentcue",
@@ -127,6 +133,7 @@ export function agentcue(
         executor: options.executor,
       });
 
+      activeBridge?.dispose();
       const bridge = createBridgeHandler({
         dispatcher,
         basePath: mountPath,
@@ -134,6 +141,7 @@ export function agentcue(
         clientScript: options.clientScript,
         clientBundlePath: resolveClientBundlePath(),
       });
+      activeBridge = bridge;
 
       server.middlewares.use((req, res, next) => {
         bridge.middleware(req, res, next);
@@ -141,6 +149,7 @@ export function agentcue(
 
       server.httpServer?.once("close", () => {
         bridge.dispose();
+        if (activeBridge === bridge) activeBridge = null;
       });
 
       if (!options.quiet && typeof server.printUrls === "function") {
@@ -172,6 +181,11 @@ export function agentcue(
           injectTo: "body",
         },
       ];
+    },
+
+    closeBundle() {
+      activeBridge?.dispose();
+      activeBridge = null;
     },
   };
 }
