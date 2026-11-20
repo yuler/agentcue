@@ -187,4 +187,76 @@ describe("agentcue/vite plugin", () => {
       });
     }
   });
+
+  it("closes active SSE streams on closeBundle when Vite runs in middlewareMode (httpServer: null)", async () => {
+    const plugin = agentcue({
+      agents: ["agy"],
+      clientScript: "window.__TEST_CLIENT_LOADED__ = true;",
+      executor: async () => ({ ok: true, exitCode: 0 }),
+    });
+
+    const middlewares: Array<
+      (
+        req: import("node:http").IncomingMessage,
+        res: import("node:http").ServerResponse,
+        next: () => void
+      ) => void
+    > = [];
+
+    const httpServer = createServer((req, res) => {
+      let idx = 0;
+      const next = () => {
+        const fn = middlewares[idx++];
+        if (fn) {
+          fn(req, res, next);
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      };
+      next();
+    });
+
+    plugin.configResolved({ root: "/tmp/vite-react-app", base: "/vite-react/" });
+    plugin.configureServer({
+      config: {
+        root: "/tmp/vite-react-app",
+        base: "/vite-react/",
+        logger: { info() {} },
+      },
+      middlewares: {
+        use(fn) {
+          middlewares.push(fn);
+        },
+      },
+      httpServer: null,
+    });
+
+    await new Promise<void>((resolve) => {
+      httpServer.listen(0, "127.0.0.1", () => resolve());
+    });
+    const addr = httpServer.address();
+    assert.ok(addr && typeof addr === "object");
+
+    const sseRes = await fetch(
+      `http://127.0.0.1:${addr.port}/vite-react/__agentcue/api/events`
+    );
+    assert.equal(sseRes.status, 200);
+    const reader = sseRes.body!.getReader();
+    const first = await reader.read();
+    assert.equal(first.done, false);
+
+    plugin.closeBundle();
+
+    const ended = await Promise.race([
+      reader.read().then((chunk) => chunk.done),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1500)),
+    ]);
+    assert.equal(ended, true, "Expected SSE stream to close on closeBundle()");
+
+    await new Promise<void>((resolve, reject) => {
+      httpServer.close((err) => (err ? reject(err) : resolve()));
+      httpServer.closeAllConnections?.();
+    });
+  });
 });

@@ -6,9 +6,11 @@ import {
   createBridgeHandler,
   createDispatcher,
 } from "../packages/agentcue/dist/index.js";
+import { resolveRepoVersion } from "../scripts/resolve-version.mjs";
 
 const examplesDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(examplesDir, "..");
+const version = resolveRepoVersion(repoRoot);
 const htmlPath = join(examplesDir, "html", "index.html");
 const viteReactDir = join(examplesDir, "vite-react");
 const clientBundlePath = join(repoRoot, "packages", "agentcue", "dist", "client.js");
@@ -62,7 +64,7 @@ function renderIndexPage() {
 }
 
 function renderHtmlExample() {
-  let html = readFileSync(htmlPath, "utf-8");
+  const html = readFileSync(htmlPath, "utf-8").replace(/\{\{VERSION\}\}/g, version);
   const injected = `
 <script src="/__agentcue/client.js"></script>
 <script>
@@ -174,10 +176,14 @@ httpServer.on("listening", () => {
 
 listenWithFallback(startPort);
 
+let shuttingDown = false;
 const shutdown = () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   htmlBridge.dispose();
   void viteServer.close().finally(() => {
     httpServer.close(() => process.exit(0));
+    httpServer.closeAllConnections?.();
   });
 };
 process.on("SIGINT", shutdown);
