@@ -108,10 +108,10 @@ jobs:
           steps.changes.outputs.example_vite_react == 'true'
         run: |
           tasks=()
-          [ "${{ steps.changes.outputs.agentcue }}" = "true" ] && tasks+=(agentcue:test)
+          [ "${{ steps.changes.outputs.agentcue }}" = "true" ] && tasks+=(cli:test)
           [ "${{ steps.changes.outputs.extension }}" = "true" ] && tasks+=(extension:test)
           [ "${{ steps.changes.outputs.web }}" = "true" ] && tasks+=(web:build)
-          [ "${{ steps.changes.outputs.example_vite_react }}" = "true" ] && tasks+=(example:vite-react:build)
+          [ "${{ steps.changes.outputs.example_vite_react }}" = "true" ] && tasks+=(example:build)
 
           args=()
           for t in "${tasks[@]}"; do

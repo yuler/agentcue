@@ -59,7 +59,7 @@ jobs:
 
       - name: Build and test agentcue
         if: steps.version.outputs.skip != 'true'
-        run: mise run agentcue:test
+        run: mise run cli:test
 
       - name: Build and test extension zip
         if: steps.version.outputs.skip != 'true'

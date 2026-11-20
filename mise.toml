@@ -1,38 +1,23 @@
 [tools]
 bun = "1.4.4"
 
-# ─── Workspace (Aggregate) ───────────────────────────────────────────────────
+# ─── Workspace ───────────────────────────────────────────────────────────────
 
 [tasks.setup]
 description = "Install workspace dependencies and build all targets"
 run = ["bun install", "mise run build"]
 
-[tasks.install]
-description = "Install and link workspace dependencies"
-run = "bun install"
-
 [tasks.dev]
-description = "Start all dev servers (agentcue, extension, web, and all examples)"
-depends = [
-  "agentcue:dev",
-  "extension:dev",
-  "web:dev",
-  "example:html:dev",
-  "example:vite-react:dev",
-]
+description = "Start core dev environment (cli, extension, web)"
+depends = ["{cli,extension,web}:dev"]
 
 [tasks.build]
 description = "Build all packages, apps, and examples"
-depends = [
-  "agentcue:build",
-  "extension:build",
-  "web:build",
-  "example:vite-react:build",
-]
+depends = ["*:build"]
 
 [tasks.test]
 description = "Run workspace test suite"
-depends = ["agentcue:test", "extension:test"]
+depends = ["*:test"]
 
 [tasks.check]
 description = "Build all targets and run test suite"
@@ -42,35 +27,31 @@ depends = ["build", "test"]
 description = "Remove build artifacts across workspaces"
 run = "rm -rf packages/*/dist apps/*/dist examples/*/dist"
 
-# ─── Package: agentcue ───────────────────────────────────────────────────────
+# ─── Core: cli ───────────────────────────────────────────────────────────────
 
-[tasks."agentcue:build:client"]
+[tasks."cli:build:client"]
 description = "Build only the browser overlay bundle (dist/client.js)"
+hide = true
 dir = "packages/agentcue"
-run = "node scripts/build.mjs --client-only"
+run = "bun scripts/build.mjs --client-only"
 
-[tasks."agentcue:build"]
-description = "Build agentcue CLI, library, Vite plugin, and browser overlay bundles"
+[tasks."cli:build"]
+description = "Build agentcue CLI, library, Vite plugin, and browser overlay"
 dir = "packages/agentcue"
 run = "bun scripts/build.mjs"
 
-[tasks."agentcue:dev"]
-description = "Watch and rebuild agentcue bundles on source changes"
-depends = ["agentcue:build"]
+[tasks."cli:dev"]
+description = "Watch agentcue bundles and run local CLI bridge (:4318)"
+depends = ["cli:build"]
 dir = "packages/agentcue"
-run = "bun scripts/build.mjs --watch --no-initial"
+run = "bun scripts/build.mjs --watch --no-initial --serve"
 
-[tasks."agentcue:start"]
-description = "Start compiled agentcue CLI (:4318)"
-depends = ["agentcue:build"]
-run = "bun packages/agentcue/dist/cli.js"
-
-[tasks."agentcue:test"]
+[tasks."cli:test"]
 description = "Run agentcue unit and server integration tests"
-depends = ["agentcue:build"]
+depends = ["cli:build"]
 run = "bun test packages/agentcue"
 
-# ─── Package: extension ──────────────────────────────────────────────────────
+# ─── Core: extension ─────────────────────────────────────────────────────────
 
 [tasks."extension:build"]
 description = "Build @agentcue/extension MV3 unpacked bundle and zip archive"
@@ -84,26 +65,15 @@ dir = "packages/extension"
 run = "bun scripts/build.mjs --watch --no-initial"
 
 [tasks."extension:test"]
-description = "Run @agentcue/extension protocol, security boundary, and build artifact tests"
+description = "Run @agentcue/extension protocol, security boundary, and build tests"
 depends = ["extension:build"]
 run = "bun test packages/extension"
 
-[tasks."extension:install:local"]
-description = "Build and install local @agentcue/extension to ~/.local/share/agentcue/extension"
-depends = ["extension:build"]
-dir = "packages/extension"
-run = "bun scripts/install.mjs --local"
-
-[tasks."extension:install:production"]
-description = "Download and install production @agentcue/extension to ~/.local/share/agentcue/extension"
-dir = "packages/extension"
-run = "bun scripts/install.mjs --production"
-
-# ─── App: web ────────────────────────────────────────────────────────────────
+# ─── Core: web ───────────────────────────────────────────────────────────────
 
 [tasks."web:build"]
 description = "Build @agentcue/web showcase"
-depends = ["agentcue:build:client"]
+depends = ["cli:build:client"]
 dir = "apps/web"
 run = "bun scripts/build.mjs"
 
@@ -113,34 +83,15 @@ depends = ["web:build"]
 dir = "apps/web"
 run = "bun scripts/serve.mjs --watch"
 
-[tasks."web:start"]
-description = "Serve built @agentcue/web showcase (:4319)"
-depends = ["web:build"]
-dir = "apps/web"
-run = "bun scripts/serve.mjs"
-
 # ─── Examples ────────────────────────────────────────────────────────────────
 
 [tasks."example:dev"]
-description = "Start all playground examples in dev mode"
-depends = [
-  "example:html:dev",
-  "example:vite-react:dev",
-]
+description = "Start unified examples server (:4320 — /html, /vite-react/)"
+depends = ["cli:build"]
+run = "bun examples/dev.mjs"
 
-[tasks."example:html:dev"]
-description = "Start plain HTML playground example (:4318)"
-depends = ["agentcue:build"]
-run = "bun --watch packages/agentcue/src/cli.ts"
-
-[tasks."example:vite-react:dev"]
-description = "Start Vite + React playground example (:5173)"
-depends = ["agentcue:build"]
-dir = "examples/vite-react"
-run = "bunx vite"
-
-[tasks."example:vite-react:build"]
-description = "Typecheck and build Vite + React playground example"
-depends = ["agentcue:build"]
+[tasks."example:build"]
+description = "Typecheck and build playground examples"
+depends = ["cli:build"]
 dir = "examples/vite-react"
 run = "bunx tsc --noEmit && bunx vite build"

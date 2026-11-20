@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -15,8 +15,9 @@ const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(pkgRoot, "..", "..");
 const distDir = join(pkgRoot, "dist");
 
-function buildAll({ skipTypes = false, clientOnly = false } = {}) {
+function buildAll({ skipTypes = false, clientOnly = false, quiet = false } = {}) {
   mkdirSync(distDir, { recursive: true });
+  const stdio = quiet ? ["ignore", "pipe", "pipe"] : "inherit";
 
   execFileSync(
     "bun",
@@ -31,11 +32,11 @@ function buildAll({ skipTypes = false, clientOnly = false } = {}) {
       "iife",
       "--minify",
     ],
-    { stdio: "inherit" }
+    { stdio }
   );
 
   if (clientOnly) {
-    console.log("Built dist/client.js");
+    if (!quiet) console.log("Built dist/client.js");
     return;
   }
 
@@ -51,7 +52,7 @@ function buildAll({ skipTypes = false, clientOnly = false } = {}) {
       "--format",
       "esm",
     ],
-    { stdio: "inherit" }
+    { stdio }
   );
 
   execFileSync(
@@ -66,7 +67,7 @@ function buildAll({ skipTypes = false, clientOnly = false } = {}) {
       "--format",
       "esm",
     ],
-    { stdio: "inherit" }
+    { stdio }
   );
 
   execFileSync(
@@ -81,7 +82,7 @@ function buildAll({ skipTypes = false, clientOnly = false } = {}) {
       "--format",
       "esm",
     ],
-    { stdio: "inherit" }
+    { stdio }
   );
 
   if (!skipTypes) {
@@ -128,36 +129,65 @@ function buildAll({ skipTypes = false, clientOnly = false } = {}) {
     }
   }
 
-  console.log(
-    "Built dist/client.js, dist/index.js, dist/vite.js, dist/cli.js, and dist/demo.html"
-  );
+  if (!quiet) {
+    console.log(
+      "Built dist/client.js, dist/index.js, dist/vite.js, dist/cli.js, and dist/demo.html"
+    );
+  }
 }
 
 const isWatch = process.argv.includes("--watch");
 const noInitial = process.argv.includes("--no-initial");
 const clientOnly = process.argv.includes("--client-only");
+const isServe = process.argv.includes("--serve");
 
 if (!noInitial) {
   buildAll({ clientOnly });
 }
 
 if (isWatch) {
-  console.log("Watching packages/agentcue/src for changes…");
+  let cliChild = null;
+  if (isServe) {
+    cliChild = spawn(
+      "bun",
+      ["--watch", join(pkgRoot, "src/cli.ts")],
+      {
+        cwd: repoRoot,
+        stdio: "inherit",
+        env: { ...process.env, AGENTCUE_DEV: "1" },
+      }
+    );
+    cliChild.on("exit", (code) => {
+      if (code && code !== 0) process.exitCode = code;
+    });
+  } else {
+    console.log(
+      "  \x1b[36m➜\x1b[0m  \x1b[1mCLI       \x1b[0m \x1b[90mwatching packages/agentcue/src\x1b[0m"
+    );
+  }
+
   let timer = null;
   const watcher = watch(join(pkgRoot, "src"), { recursive: true }, (_event, filename) => {
     if (!filename) return;
     clearTimeout(timer);
     timer = setTimeout(() => {
+      const start = Date.now();
       try {
-        buildAll({ skipTypes: true });
+        buildAll({ skipTypes: true, quiet: true });
+        console.log(
+          `  \x1b[36m↻\x1b[0m  \x1b[1mCLI       \x1b[0m \x1b[90mrebuilt dist/ (${Date.now() - start}ms)\x1b[0m`
+        );
       } catch (err) {
-        console.error("[agentcue:dev] rebuild failed:", err);
+        console.error("[cli:dev] rebuild failed:", err);
       }
     }, 80);
   });
   const shutdown = () => {
     clearTimeout(timer);
     watcher.close();
+    if (cliChild && !cliChild.killed) {
+      cliChild.kill("SIGTERM");
+    }
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

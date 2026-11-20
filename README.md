@@ -118,8 +118,11 @@ Requires Node.js `>= 22` and [`mise`](https://mise.jdx.dev/) (provisions `bun` v
 # Install workspace dependencies and build all targets
 mise run setup
 
-# Start all watchers and dev servers concurrently
+# Start core dev environment (cli, extension, web)
 mise run dev
+
+# Start unified playground examples server (/html, /vite-react/)
+mise run example:dev
 
 # Build all packages/apps/examples and run the test suite
 mise run check
@@ -127,13 +130,12 @@ mise run check
 
 ### Workspace Targets
 
-| Workspace             | Description                                                | Dev / Start Command               | Port    |
-| --------------------- | ---------------------------------------------------------- | --------------------------------- | ------- |
-| `packages/agentcue`   | CLI, local HTTP/SSE bridge, Vite plugin, and overlay       | `mise run agentcue:start`         | `:4318` |
-| `packages/extension`  | Manifest V3 browser extension (unpacked + `.zip` bundle)   | `mise run extension:dev`          | —       |
-| `apps/web`            | Official showcase and interactive documentation            | `mise run web:dev`                | `:4319` |
-| `examples/html`       | Plain HTML playground with live reload                     | `mise run example:html:dev`       | `:4320` |
-| `examples/vite-react` | Vite + React + TypeScript HMR playground                   | `mise run example:vite-react:dev` | `:5173` |
+| Workspace            | Description                                              | Dev Command              | Port    |
+| -------------------- | -------------------------------------------------------- | ------------------------ | ------- |
+| `packages/agentcue`  | CLI, local HTTP/SSE bridge, Vite plugin, and overlay     | `mise run cli:dev`       | `:4318` |
+| `packages/extension` | Manifest V3 browser extension (unpacked + `.zip` bundle) | `mise run extension:dev` | —       |
+| `apps/web`           | Official showcase and interactive documentation          | `mise run web:dev`       | `:4319` |
+| `examples/`          | Unified playground server (`/html`, `/vite-react/`)      | `mise run example:dev`   | `:4320` |
 
 Other workspace tasks: `mise run build`, `mise run test`, and `mise run clean`.
 

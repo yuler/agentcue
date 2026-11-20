@@ -45,7 +45,9 @@ const server = createServer((req, res) => {
 server.on("listening", () => {
   const addr = server.address();
   const bound = addr && typeof addr === "object" ? addr.port : startPort;
-  console.log(`\n✦ @agentcue/web listening on http://localhost:${bound}\n`);
+  console.log(
+    `  \x1b[36m➜\x1b[0m  \x1b[1mWeb       \x1b[0m \x1b[36mhttp://localhost:${bound}\x1b[0m  \x1b[90m(zh: http://localhost:${bound}/zh)\x1b[0m`
+  );
 });
 
 function listenWithFallback(port) {
@@ -72,10 +74,14 @@ if (process.argv.includes("--watch")) {
   const triggerRebuild = () => {
     clearTimeout(timer);
     timer = setTimeout(() => {
+      const start = Date.now();
       try {
-        execFileSync("node", [join(scriptsDir, "build.mjs")], {
-          stdio: "inherit",
+        execFileSync("bun", [join(scriptsDir, "build.mjs")], {
+          stdio: ["ignore", "pipe", "pipe"],
         });
+        console.log(
+          `  \x1b[36m↻\x1b[0m  \x1b[1mWeb       \x1b[0m \x1b[90mrebuilt dist/ (${Date.now() - start}ms)\x1b[0m`
+        );
       } catch (err) {
         console.error("[web:dev] rebuild failed:", err);
       }

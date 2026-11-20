@@ -83,7 +83,7 @@ function createZipBuffer(entries) {
   return Buffer.concat([...localParts, ...centralParts, eocd]);
 }
 
-function bundleEntry(entryFile, outFile, format) {
+function bundleEntry(entryFile, outFile, format, quiet = false) {
   execFileSync(
     "bun",
     [
@@ -97,7 +97,7 @@ function bundleEntry(entryFile, outFile, format) {
       format,
       "--minify",
     ],
-    { stdio: "inherit" }
+    { stdio: quiet ? ["ignore", "pipe", "pipe"] : "inherit" }
   );
 }
 
@@ -145,13 +145,13 @@ function resolveManifestVersion(coreVersion, fallbackVersion) {
   return "0.0.1";
 }
 
-function buildAll({ skipTypes = false } = {}) {
+function buildAll({ skipTypes = false, quiet = false } = {}) {
   mkdirSync(distIconsDir, { recursive: true });
 
-  bundleEntry("src/background.ts", "background.js", "esm");
-  bundleEntry("src/content.ts", "content.js", "iife");
-  bundleEntry("src/page.ts", "page.js", "iife");
-  bundleEntry("src/popup.ts", "popup.js", "esm");
+  bundleEntry("src/background.ts", "background.js", "esm", quiet);
+  bundleEntry("src/content.ts", "content.js", "iife", quiet);
+  bundleEntry("src/page.ts", "page.js", "iife", quiet);
+  bundleEntry("src/popup.ts", "popup.js", "esm", quiet);
 
   if (!skipTypes) {
     const tscCandidates = [
@@ -211,9 +211,11 @@ function buildAll({ skipTypes = false } = {}) {
   const zipBuffer = createZipBuffer(zipEntries);
   writeFileSync(join(distDir, "agentcue-extension.zip"), zipBuffer);
 
-  console.log(
-    "Built packages/extension/dist (unpacked MV3 extension + agentcue-extension.zip)"
-  );
+  if (!quiet) {
+    console.log(
+      "Built packages/extension/dist (unpacked MV3 extension + agentcue-extension.zip)"
+    );
+  }
 }
 
 const isWatch = process.argv.includes("--watch");
@@ -224,7 +226,9 @@ if (!noInitial) {
 }
 
 if (isWatch) {
-  console.log("Watching packages/extension/src for changes…");
+  console.log(
+    "  \x1b[36m➜\x1b[0m  \x1b[1mExtension \x1b[0m \x1b[90mwatching packages/extension/dist\x1b[0m"
+  );
   let timer = null;
   const watcher = watch(
     join(extRoot, "src"),
@@ -233,8 +237,12 @@ if (isWatch) {
       if (!filename) return;
       clearTimeout(timer);
       timer = setTimeout(() => {
+        const start = Date.now();
         try {
-          buildAll({ skipTypes: true });
+          buildAll({ skipTypes: true, quiet: true });
+          console.log(
+            `  \x1b[36m↻\x1b[0m  \x1b[1mExtension \x1b[0m \x1b[90mrebuilt dist/ (${Date.now() - start}ms)\x1b[0m`
+          );
         } catch (err) {
           console.error("[extension:dev] rebuild failed:", err);
         }
