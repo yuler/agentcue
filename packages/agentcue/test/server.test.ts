@@ -205,7 +205,7 @@ describe("Local Bridge HTTP Server & Serial Queue Seam", () => {
     }
   });
 
-  it("resolves non-zero version and injects it into served demo HTML", async () => {
+  it("resolves non-zero version and serves bridge index page at root", async () => {
     const version = getAgentcueVersion();
     assert.match(version, /^\d+\.\d+\.\d+$/);
     assert.notEqual(version, "0.0.0");
@@ -216,14 +216,12 @@ describe("Local Bridge HTTP Server & Serial Queue Seam", () => {
       executor: async () => ({ ok: true, exitCode: 0 }),
     });
     try {
-      const res = await fetch(`${server.origin}/demo`);
+      const res = await fetch(`${server.origin}/`);
       assert.equal(res.status, 200);
+      assert.match(res.headers.get("content-type") ?? "", /text\/html/);
       const html = await res.text();
-      assert.equal(html.includes("{{VERSION}}"), false);
-      assert.ok(
-        html.includes(`Beta v${version} Playground`),
-        `Expected demo HTML to contain Beta v${version} Playground`
-      );
+      assert.ok(html.includes(`v${version}`));
+      assert.ok(html.includes(`${server.origin}/client.js`));
     } finally {
       await server.close();
     }

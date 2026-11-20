@@ -8,8 +8,8 @@ description = "Install workspace dependencies and build all targets"
 run = ["bun install", "mise run build"]
 
 [tasks.dev]
-description = "Start core dev environment (cli, extension, web)"
-depends = ["{cli,extension,web}:dev"]
+description = "Start full dev environment (cli, extension, web, example)"
+depends = ["{cli,extension,web,example}:dev"]
 
 [tasks.build]
 description = "Build all packages, apps, and examples"

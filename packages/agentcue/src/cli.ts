@@ -114,7 +114,7 @@ async function main() {
 
   if (process.env.AGENTCUE_DEV === "1") {
     console.log(
-      `  \x1b[36m➜\x1b[0m  \x1b[1mCLI       \x1b[0m \x1b[36m${running.origin}\x1b[0m  \x1b[90m(demo: ${running.origin}/demo)\x1b[0m  ·  ${agentList}`
+      `  \x1b[36m➜\x1b[0m  \x1b[1mCLI       \x1b[0m \x1b[36m${running.origin}\x1b[0m  ·  ${agentList}`
     );
   } else {
     const scriptTag = `<script src="${running.origin}/client.js"></script>`;
@@ -125,13 +125,10 @@ async function main() {
   Workspace : ${state.cwd}
   Agents    : ${agentList}
 
-\x1b[1m1) Try the built-in live playground:\x1b[0m
-   ${running.origin}/demo
-
-\x1b[1m2) Add to any local dev app (HTML / Vite / Next / Vue / Svelte):\x1b[0m
+\x1b[1m1) Add to any local dev app (HTML / Vite / Next / Vue / Svelte):\x1b[0m
    ${scriptTag}
 
-\x1b[1m3) Or run as a zero-config Bookmarklet URL:\x1b[0m
+\x1b[1m2) Or run as a zero-config Bookmarklet URL:\x1b[0m
    ${bookmarklet}
 
 \x1b[90mShortcuts: Cmd/Ctrl+Shift+F activate · Enter save Pin · S (or Cmd/Ctrl+Enter) send · C copy · X clear · H hide · Esc collapse\x1b[0m

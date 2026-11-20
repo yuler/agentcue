@@ -72,7 +72,7 @@ describe("@agentcue/extension protocol & helpers", () => {
 
   it("classifies localhost URLs and injectable tab URLs accurately", () => {
     assert.equal(isLocalhostUrl("http://localhost:5173/dashboard"), true);
-    assert.equal(isLocalhostUrl("http://127.0.0.1:4318/demo"), true);
+    assert.equal(isLocalhostUrl("http://127.0.0.1:4320/html"), true);
     assert.equal(isLocalhostUrl("http://[::1]:3000/"), true);
     assert.equal(isLocalhostUrl("http://web.localhost:8080/"), true);
     assert.equal(isLocalhostUrl("https://example.com/"), false);
