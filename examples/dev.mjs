@@ -244,7 +244,14 @@ function renderHtmlExample() {
 let viteServer;
 
 const httpServer = createServer((req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  let url;
+  try {
+    url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  } catch {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Bad request");
+    return;
+  }
   const { pathname } = url;
 
   if (pathname === "/vite-react") {
