@@ -171,7 +171,19 @@ export function renderAgentMenuDom(
   list.forEach((agent, idx) => {
     const btn = document.createElement("button");
     btn.className = agent === selectedAgent ? "agent-opt selected" : "agent-opt";
-    btn.innerHTML = `<span class="agent-opt-left"><span class="agent-opt-dot"></span><span>${agent}</span></span><span class="agent-opt-kbd">${idx + 1}</span>`;
+    const left = document.createElement("span");
+    left.className = "agent-opt-left";
+    const dot = document.createElement("span");
+    dot.className = "agent-opt-dot";
+    const name = document.createElement("span");
+    name.textContent = agent;
+    left.appendChild(dot);
+    left.appendChild(name);
+    const kbd = document.createElement("span");
+    kbd.className = "agent-opt-kbd";
+    kbd.textContent = String(idx + 1);
+    btn.appendChild(left);
+    btn.appendChild(kbd);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       onSelect(agent);
