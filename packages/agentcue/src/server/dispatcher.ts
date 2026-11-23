@@ -209,11 +209,21 @@ interface QueuedItem {
   prompt: string;
 }
 
+export const MAX_QUEUE_SIZE = 50;
+
+export class QueueFullError extends Error {
+  constructor(maxQueueSize = MAX_QUEUE_SIZE) {
+    super(`Cue queue is full (max ${maxQueueSize})`);
+    this.name = "QueueFullError";
+  }
+}
+
 export interface DispatcherOptions {
   cwd: string;
   agents?: AgentId[];
   defaultAgent?: AgentId;
   executor?: AgentExecutor;
+  maxQueueSize?: number;
 }
 
 export interface Dispatcher {
@@ -230,6 +240,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
       : (agents[0] ?? options.defaultAgent ?? null);
 
   const executor = options.executor ?? createSpawnExecutor();
+  const maxQueueSize = options.maxQueueSize ?? MAX_QUEUE_SIZE;
   const listeners = new Set<(event: ServerEvent) => void>();
   const queue: QueuedItem[] = [];
 
@@ -352,6 +363,9 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
     cueId: string;
     queuePosition: number;
   } {
+    if (queue.length >= maxQueueSize) {
+      throw new QueueFullError(maxQueueSize);
+    }
     const cueId = randomUUID();
     const prompt = formatCuePrompt(payload);
     queue.push({ cueId, payload, prompt });

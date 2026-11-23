@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Dispatcher } from "./dispatcher.ts";
+import { QueueFullError, type Dispatcher } from "./dispatcher.ts";
 import {
   SUPPORTED_AGENTS,
   type AgentId,
@@ -51,14 +51,32 @@ function readJsonBody(req: IncomingMessage, maxBytes = 512_000): Promise<unknown
   });
 }
 
+export const MAX_PINS = 50;
+
+export function parseRequestUrl(req: IncomingMessage): URL | null {
+  try {
+    return new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  } catch {
+    return null;
+  }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 export function validateCuePayload(
   raw: unknown,
   allowedAgents: AgentId[]
 ): CuePayload {
-  if (!raw || typeof raw !== "object") {
+  if (!isPlainRecord(raw)) {
     throw new Error("Cue body must be a JSON object");
   }
-  const obj = raw as Record<string, unknown>;
+  const obj = raw;
   const agent = obj.agent as AgentId;
   if (!SUPPORTED_AGENTS.includes(agent)) {
     throw new Error(`Unsupported agent "${String(obj.agent)}"`);
@@ -69,14 +87,55 @@ export function validateCuePayload(
   if (!Array.isArray(obj.pins) || obj.pins.length === 0) {
     throw new Error("Cue must contain at least one Pin");
   }
+  if (obj.pins.length > MAX_PINS) {
+    throw new Error(`Cue cannot contain more than ${MAX_PINS} Pins`);
+  }
   for (const pin of obj.pins) {
-    if (!pin || typeof pin !== "object") throw new Error("Invalid Pin entry");
-    const p = pin as Record<string, unknown>;
+    if (!isPlainRecord(pin)) throw new Error("Invalid Pin entry");
+    const p = pin;
     if (typeof p.note !== "string" || !p.note.trim()) {
       throw new Error("Every Pin requires a non-empty note");
     }
-    if (!p.context || typeof p.context !== "object") {
+    if (!isPlainRecord(p.context)) {
       throw new Error("Every Pin requires DOM context");
+    }
+    const ctx = p.context;
+    for (const key of [
+      "tagName",
+      "selector",
+      "breadcrumb",
+      "textExcerpt",
+      "outerHTML",
+    ] as const) {
+      if (typeof ctx[key] !== "string") {
+        throw new Error(`Pin context requires string "${key}"`);
+      }
+    }
+    if (!isPlainRecord(ctx.boundingBox)) {
+      throw new Error("Pin context requires a boundingBox object");
+    }
+    for (const dim of ["x", "y", "width", "height"] as const) {
+      const val = ctx.boundingBox[dim];
+      if (typeof val !== "number" || !Number.isFinite(val)) {
+        throw new Error(`Pin context boundingBox.${dim} must be a finite number`);
+      }
+    }
+    if (!isPlainRecord(ctx.computedStyles)) {
+      throw new Error("Pin context requires a computedStyles object");
+    }
+    for (const [styleKey, styleVal] of Object.entries(ctx.computedStyles)) {
+      if (typeof styleVal !== "string") {
+        throw new Error(`Pin context computedStyles["${styleKey}"] must be a string`);
+      }
+    }
+    if (ctx.sourceHint !== undefined && typeof ctx.sourceHint !== "string") {
+      throw new Error('Pin context "sourceHint" must be a string');
+    }
+    if (
+      ctx.componentStack !== undefined &&
+      typeof ctx.componentStack !== "string"
+    ) {
+      throw new Error('Pin context "componentStack" must be a string');
     }
   }
   return {
@@ -136,7 +195,8 @@ export function createBridgeHandler(
         queuePosition: queued.queuePosition,
       });
     } catch (err) {
-      sendJson(res, 400, {
+      const status = err instanceof QueueFullError ? 429 : 400;
+      sendJson(res, status, {
         ok: false,
         error: err instanceof Error ? err.message : "Bad request",
       });
@@ -149,10 +209,11 @@ export function createBridgeHandler(
     next?: NextFunction
   ) {
     const method = req.method || "GET";
-    const urlObj = new URL(
-      req.url || "/",
-      `http://${req.headers.host || "localhost"}`
-    );
+    const urlObj = parseRequestUrl(req);
+    if (!urlObj) {
+      sendJson(res, 400, { ok: false, error: "Invalid request URL" });
+      return;
+    }
     const pathname = urlObj.pathname;
 
     let subPath = pathname;

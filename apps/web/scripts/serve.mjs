@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, readFileSync, watch } from "node:fs";
-import { dirname, extname, join } from "node:path";
+import { existsSync, readFileSync, statSync, watch } from "node:fs";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(scriptsDir, "..");
 const distDir = join(webRoot, "dist");
+const resolvedDistDir = resolve(distDir);
 const startPort = Number(process.env.PORT) || 4319;
 const host = "127.0.0.1";
 
@@ -18,7 +19,14 @@ const MIME = {
 };
 
 const server = createServer((req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  let url;
+  try {
+    url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  } catch {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Bad request");
+    return;
+  }
   let relPath = url.pathname === "/" ? "index.html" : url.pathname.replace(/^\/+/, "");
 
   // Resolve /zh and /zh/ to zh/index.html
@@ -26,9 +34,11 @@ const server = createServer((req, res) => {
     relPath = "zh/index.html";
   }
 
-  const filePath = join(distDir, relPath);
+  const filePath = resolve(resolvedDistDir, relPath);
+  const isContained =
+    filePath === resolvedDistDir || filePath.startsWith(resolvedDistDir + sep);
 
-  if (!filePath.startsWith(distDir) || !existsSync(filePath)) {
+  if (!isContained || !existsSync(filePath) || !statSync(filePath).isFile()) {
     res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Not found");
     return;

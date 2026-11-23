@@ -8,6 +8,7 @@ import {
 } from "./dispatcher.ts";
 import {
   createBridgeHandler,
+  parseRequestUrl,
   resolveClientBundlePath,
   sendJson,
 } from "./handler.ts";
@@ -134,10 +135,11 @@ export async function startServer(
   const server = createServer((req, res) => {
     bridge.middleware(req, res, () => {
       const method = req.method || "GET";
-      const urlObj = new URL(
-        req.url || "/",
-        `http://${req.headers.host || "localhost"}`
-      );
+      const urlObj = parseRequestUrl(req);
+      if (!urlObj) {
+        sendJson(res, 400, { ok: false, error: "Invalid request URL" });
+        return;
+      }
       if (method === "GET" && (urlObj.pathname === "/" || urlObj.pathname === "/index.html")) {
         const state = dispatcher.getState();
         const html = renderBridgeIndexPage({
