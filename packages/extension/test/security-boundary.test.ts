@@ -389,6 +389,56 @@ describe("@agentcue/extension P1 security boundary & UX lifecycle", () => {
       assert.equal(invalidPayload.ok, false);
       assert.equal(invalidPayload.status, 400);
 
+      // ext:check-bridge must reject content-script / tab senders and foreign extensions
+      const tabCheckBridge = (await h.mockChrome.runtime.sendMessage(
+        { type: "ext:check-bridge", bridgeOrigin: "http://localhost:9999" },
+        { id: "agentcue-test-ext-id", tab: { id: 1, url: "https://staging.example.com" } }
+      )) as { ok: boolean; reachable?: boolean; error?: string };
+      assert.equal(tabCheckBridge.ok, false);
+      assert.equal(tabCheckBridge.reachable, false);
+      assert.match(tabCheckBridge.error || "", /Unauthorized/i);
+
+      const foreignExtCheckBridge = (await h.mockChrome.runtime.sendMessage(
+        { type: "ext:check-bridge", bridgeOrigin: "http://localhost:9999" },
+        { id: "evil-extension-id" }
+      )) as { ok: boolean; reachable?: boolean; error?: string };
+      assert.equal(foreignExtCheckBridge.ok, false);
+      assert.equal(foreignExtCheckBridge.reachable, false);
+      assert.match(foreignExtCheckBridge.error || "", /Unauthorized/i);
+
+      // Authorized extension page sender (no sender.tab) normalizes non-loopback bridgeOrigin
+      const popupCheckBridge = (await h.mockChrome.runtime.sendMessage(
+        { type: "ext:check-bridge", bridgeOrigin: "https://evil.example.com:4318" },
+        { id: "agentcue-test-ext-id" }
+      )) as { ok: boolean; bridgeOrigin: string };
+      assert.equal(popupCheckBridge.bridgeOrigin, "http://localhost:4318");
+
+      // chrome.runtime.onConnect must disconnect unauthorized SSE port senders immediately
+      const foreignPort = h.mockChrome.runtime.connect(
+        { name: "agentcue-sse" },
+        { id: "evil-extension-id", tab: { id: 1, url: "https://staging.example.com" } }
+      );
+      assert.equal(foreignPort.disconnected, true);
+
+      const nonInjectableTabPort = h.mockChrome.runtime.connect(
+        { name: "agentcue-sse" },
+        { id: "agentcue-test-ext-id", tab: { id: 2, url: "chrome://extensions" } }
+      );
+      assert.equal(nonInjectableTabPort.disconnected, true);
+
+      const missingSenderPort = h.mockChrome.runtime.connect(
+        { name: "agentcue-sse" },
+        null
+      );
+      assert.equal(missingSenderPort.disconnected, true);
+
+      const authorizedTabPort = h.mockChrome.runtime.connect(
+        { name: "agentcue-sse" },
+        { id: "agentcue-test-ext-id", tab: { id: 1, url: "https://staging.example.com" } }
+      );
+      assert.equal(authorizedTabPort.disconnected, false);
+      authorizedTabPort.disconnect();
+
       assert.equal(h.postedCues.length, 0);
     } finally {
       h.cleanup();

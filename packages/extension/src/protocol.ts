@@ -157,6 +157,9 @@ export function normalizeBridgeOrigin(raw: unknown): string {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return DEFAULT_BRIDGE_ORIGIN;
     }
+    if (!isLocalhostUrl(parsed.origin)) {
+      return DEFAULT_BRIDGE_ORIGIN;
+    }
     const cleanPath = parsed.pathname.replace(/\/+$/, "");
     return `${parsed.origin}${cleanPath}`;
   } catch {
