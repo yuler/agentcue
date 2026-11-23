@@ -2,6 +2,7 @@ import {
   DEFAULT_BRIDGE_ORIGIN,
   DEFAULT_EXTENSION_SETTINGS,
   normalizeBridgeOrigin,
+  normalizeBridgeToken,
   normalizeSettings,
   STORAGE_SETTINGS_KEY,
   type BridgeHealthResult,
@@ -22,6 +23,7 @@ const floatingBarRow = document.getElementById("floating-bar-row") as HTMLLabelE
 const toggleFloatingSwitch = document.getElementById("toggle-floating-switch") as HTMLInputElement;
 const conflictTip = document.getElementById("conflict-tip") as HTMLDivElement;
 const originInput = document.getElementById("bridge-origin") as HTMLInputElement;
+const tokenInput = document.getElementById("bridge-token") as HTMLInputElement;
 const resetBtn = document.getElementById("reset-origin-btn") as HTMLButtonElement;
 const saveBtn = document.getElementById("save-btn") as HTMLButtonElement;
 const statusPill = document.getElementById("bridge-status-pill") as HTMLDivElement;
@@ -103,7 +105,7 @@ function renderTabState(state: TabStateResult) {
   }
 }
 
-async function checkBridgeStatus(bridgeOrigin: string) {
+async function checkBridgeStatus(bridgeOrigin: string, bridgeToken?: string) {
   statusPill.className = "status-pill";
   statusText.textContent = "Checking…";
 
@@ -111,6 +113,7 @@ async function checkBridgeStatus(bridgeOrigin: string) {
     const res = await chrome.runtime.sendMessage<BridgeHealthResult>({
       type: "ext:check-bridge",
       bridgeOrigin,
+      bridgeToken,
     });
 
     if (res?.ok && res.state) {
@@ -188,18 +191,23 @@ async function loadCurrentSettings() {
     currentEnabled = settings.enabled;
     currentShowFloatingBar = settings.showFloatingBar;
     originInput.value = settings.bridgeOrigin;
-    await checkBridgeStatus(settings.bridgeOrigin);
+    tokenInput.value = settings.bridgeToken;
+    await checkBridgeStatus(settings.bridgeOrigin, settings.bridgeToken);
   } catch {
     originInput.value = DEFAULT_EXTENSION_SETTINGS.bridgeOrigin;
+    tokenInput.value = DEFAULT_EXTENSION_SETTINGS.bridgeToken;
   }
 }
 
 async function persistOrigin() {
   const bridgeOrigin = normalizeBridgeOrigin(originInput.value);
+  const bridgeToken = normalizeBridgeToken(tokenInput.value);
   originInput.value = bridgeOrigin;
+  tokenInput.value = bridgeToken;
   await chrome.storage.local.set({
     [STORAGE_SETTINGS_KEY]: {
       bridgeOrigin,
+      bridgeToken,
       enabled: currentEnabled,
       showFloatingBar: currentShowFloatingBar,
     },
@@ -211,7 +219,7 @@ async function persistOrigin() {
     saveBtn.textContent = prevLabel;
     saveBtn.classList.remove("saved");
   }, 1100);
-  await checkBridgeStatus(bridgeOrigin);
+  await checkBridgeStatus(bridgeOrigin, bridgeToken);
 }
 
 toggleBtn.addEventListener("click", () => {
@@ -287,8 +295,15 @@ originInput.addEventListener("keydown", (e) => {
     void persistOrigin();
   }
 });
+tokenInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    void persistOrigin();
+  }
+});
 resetBtn.addEventListener("click", () => {
   originInput.value = DEFAULT_BRIDGE_ORIGIN;
+  tokenInput.value = "";
   void persistOrigin();
 });
 

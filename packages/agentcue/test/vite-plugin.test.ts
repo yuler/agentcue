@@ -58,6 +58,19 @@ describe("agentcue/vite plugin", () => {
 
     const disabled = agentcue({ enabled: false });
     assert.deepEqual(disabled.transformIndexHtml(), []);
+
+    const tokenPlugin = agentcue({ token: "vite-secret-token" });
+    assert.deepEqual(tokenPlugin.transformIndexHtml(), [
+      {
+        tag: "script",
+        attrs: {
+          src: "/__agentcue/client.js",
+          "data-token": "vite-secret-token",
+          defer: true,
+        },
+        injectTo: "body",
+      },
+    ]);
   });
 
   it("mounts /__agentcue middleware, dispatches Cues, passes non-plugin routes through, and closes SSE cleanly", async () => {

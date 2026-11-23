@@ -295,7 +295,8 @@
         display: flex;
         gap: 5px;
       }
-      input[type="text"] {
+      input[type="text"],
+      input[type="password"] {
         flex: 1;
         min-width: 0;
         padding: 6px 8px;
@@ -306,8 +307,12 @@
         font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
         outline: none;
       }
-      input[type="text"]:focus {
+      input[type="text"]:focus,
+      input[type="password"]:focus {
         border-color: var(--accent);
+      }
+      .token-label {
+        margin-top: 8px;
       }
       .btn {
         padding: 6px 9px;
@@ -407,6 +412,17 @@
       />
       <button type="button" class="btn" id="reset-origin-btn" title="Reset to default">Reset</button>
       <button type="button" class="btn save" id="save-btn">Save</button>
+    </div>
+
+    <label class="field-label token-label" for="bridge-token">Bridge Token (Optional)</label>
+    <div class="input-row">
+      <input
+        type="password"
+        id="bridge-token"
+        placeholder="Optional --token secret"
+        spellcheck="false"
+        autocomplete="off"
+      />
     </div>
 
     <script type="module" src="./popup.js"></script>

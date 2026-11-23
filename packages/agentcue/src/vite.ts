@@ -183,11 +183,16 @@ export function agentcue(
 
     transformIndexHtml() {
       if (!enabled) return [];
+      const expectedToken =
+        options.token !== undefined
+          ? options.token.trim() || undefined
+          : process.env.AGENTCUE_TOKEN?.trim() || undefined;
       return [
         {
           tag: "script",
           attrs: {
             src: `${mountPath}/client.js`,
+            ...(expectedToken ? { "data-token": expectedToken } : {}),
             defer: true,
           },
           injectTo: "body",

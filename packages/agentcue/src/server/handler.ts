@@ -432,10 +432,7 @@ export function createBridgeHandler(
         (existsSync(bundlePath)
           ? readFileSync(bundlePath, "utf-8")
           : "console.error('[agentcue] dist/client.js not built yet.');");
-      const tokenAssignment = expectedToken
-        ? `window.__AGENTCUE_TOKEN__=${JSON.stringify(expectedToken)};\n`
-        : "";
-      const injected = `window.__AGENTCUE_ORIGIN__=${JSON.stringify(origin)};\n${tokenAssignment}${scriptBody}`;
+      const injected = `window.__AGENTCUE_ORIGIN__=${JSON.stringify(origin)};\n${scriptBody}`;
       res.writeHead(200, {
         ...corsHeaders,
         "Content-Type": "application/javascript; charset=utf-8",

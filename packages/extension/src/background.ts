@@ -1,4 +1,5 @@
 import {
+  buildBridgeAuthHeaders,
   consumeSseResponse,
   DEFAULT_BRIDGE_ORIGIN,
   DEFAULT_EXTENSION_SETTINGS,
@@ -6,6 +7,7 @@ import {
   isInjectableTabUrl,
   isValidCuePayload,
   normalizeBridgeOrigin,
+  normalizeBridgeToken,
   normalizeSettings,
   sendCueToBridge,
   SSE_PORT_NAME,
@@ -438,7 +440,7 @@ export function createSharedSseHub() {
     stopUpstream();
     if (ports.size === 0) return;
 
-    const { bridgeOrigin } = await loadSettings();
+    const { bridgeOrigin, bridgeToken } = await loadSettings();
     if (!isCurrentAttempt(generation) || ports.size === 0) return;
 
     const controller = new AbortController();
@@ -447,7 +449,10 @@ export function createSharedSseHub() {
     try {
       const res = await fetch(`${bridgeOrigin}/api/events`, {
         method: "GET",
-        headers: { Accept: "text/event-stream" },
+        headers: {
+          Accept: "text/event-stream",
+          ...buildBridgeAuthHeaders(bridgeToken),
+        },
         cache: "no-store",
         signal: controller.signal,
       });
@@ -498,7 +503,11 @@ export function createSharedSseHub() {
     if (areaName === "local" && changes[STORAGE_SETTINGS_KEY]) {
       const prev = normalizeSettings(changes[STORAGE_SETTINGS_KEY].oldValue);
       const next = normalizeSettings(changes[STORAGE_SETTINGS_KEY].newValue);
-      if (prev.bridgeOrigin !== next.bridgeOrigin && ports.size > 0) {
+      if (
+        (prev.bridgeOrigin !== next.bridgeOrigin ||
+          prev.bridgeToken !== next.bridgeToken) &&
+        ports.size > 0
+      ) {
         lastStateEvent = null;
         void connectLoop();
       }
@@ -651,7 +660,11 @@ export function initBackground(): void {
       }
       void (async () => {
         const settings = await loadSettings();
-        const result = await sendCueToBridge(settings.bridgeOrigin, msg.payload);
+        const result = await sendCueToBridge(
+          settings.bridgeOrigin,
+          msg.payload,
+          settings.bridgeToken
+        );
         sendResponse(result);
       })();
       return true;
@@ -672,7 +685,11 @@ export function initBackground(): void {
         const origin = normalizeBridgeOrigin(
           msg.bridgeOrigin || settings.bridgeOrigin
         );
-        const health = await fetchBridgeState(origin);
+        const token =
+          msg.bridgeToken !== undefined
+            ? normalizeBridgeToken(msg.bridgeToken)
+            : settings.bridgeToken;
+        const health = await fetchBridgeState(origin, token);
         sendResponse(health);
       })();
       return true;

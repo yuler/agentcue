@@ -140,13 +140,20 @@ async function main() {
       `  \x1b[36m➜\x1b[0m  \x1b[1mCLI       \x1b[0m \x1b[36m${running.origin}\x1b[0m  ·  ${agentList}`
     );
   } else {
-    const scriptTag = `<script src="${running.origin}/client.js"></script>`;
-    const bookmarklet = `javascript:(()=>{const s=document.createElement('script');s.src='${running.origin}/client.js?t='+Date.now();document.head.appendChild(s);})()`;
+    const tokenAttr = args.token
+      ? ` data-token=${JSON.stringify(args.token)}`
+      : "";
+    const scriptTag = `<script src="${running.origin}/client.js"${tokenAttr}></script>`;
+    const bookmarkletInit = args.token
+      ? `window.__AGENTCUE_TOKEN__=${JSON.stringify(args.token)};`
+      : "";
+    const bookmarklet = `javascript:(()=>{${bookmarkletInit}const s=document.createElement('script');s.src='${running.origin}/client.js?t='+Date.now();document.head.appendChild(s);})()`;
+    const tokenLine = args.token ? `\n  Token     : ${args.token}` : "";
 
     console.log(`
 \x1b[1m\x1b[36m✦ agentcue\x1b[0m \x1b[90mv${getAgentcueVersion()}\x1b[0m bridge listening on \x1b[1m${running.origin}\x1b[0m
   Workspace : ${state.cwd}
-  Agents    : ${agentList}
+  Agents    : ${agentList}${tokenLine}
 
 \x1b[1m1) Add to any local dev app (HTML / Vite / Next / Vue / Svelte):\x1b[0m
    ${scriptTag}

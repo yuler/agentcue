@@ -21,12 +21,14 @@ const MAX_HINT_LENGTH = 200;
 
 export interface ExtensionSettings {
   bridgeOrigin: string;
+  bridgeToken: string;
   enabled: boolean;
   showFloatingBar: boolean;
 }
 
 export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   bridgeOrigin: DEFAULT_BRIDGE_ORIGIN,
+  bridgeToken: "",
   enabled: true,
   showFloatingBar: true,
 };
@@ -59,7 +61,7 @@ export type RuntimeRequestMessage =
   | { type: "ext:active-changed"; active: boolean }
   | { type: "ext:embedded-detected"; embeddedSource: EmbeddedSdkSource }
   | { type: "ext:send-cue"; payload: CuePayload }
-  | { type: "ext:check-bridge"; bridgeOrigin?: string };
+  | { type: "ext:check-bridge"; bridgeOrigin?: string; bridgeToken?: string };
 
 export type EmbeddedSdkSource = "vite" | "script" | "sdk";
 
@@ -167,6 +169,22 @@ export function normalizeBridgeOrigin(raw: unknown): string {
   }
 }
 
+export function normalizeBridgeToken(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw.replace(/[\u0000-\u001f\u007f]+/g, "").trim();
+}
+
+export function buildBridgeAuthHeaders(
+  token?: string
+): Record<string, string> {
+  const clean = normalizeBridgeToken(token);
+  if (!clean) return {};
+  return {
+    Authorization: `Bearer ${clean}`,
+    "X-Agentcue-Token": clean,
+  };
+}
+
 export function normalizeSettings(raw: unknown): ExtensionSettings {
   if (!raw || typeof raw !== "object") {
     return { ...DEFAULT_EXTENSION_SETTINGS };
@@ -174,6 +192,7 @@ export function normalizeSettings(raw: unknown): ExtensionSettings {
   const obj = raw as Record<string, unknown>;
   return {
     bridgeOrigin: normalizeBridgeOrigin(obj.bridgeOrigin),
+    bridgeToken: normalizeBridgeToken(obj.bridgeToken ?? obj.token),
     enabled:
       typeof obj.enabled === "boolean"
         ? obj.enabled
@@ -213,13 +232,17 @@ export function isInjectableTabUrl(rawUrl: string | undefined): boolean {
 
 export async function sendCueToBridge(
   bridgeOrigin: string,
-  payload: CuePayload
+  payload: CuePayload,
+  token?: string
 ): Promise<CueDispatchResult> {
   const origin = normalizeBridgeOrigin(bridgeOrigin);
   try {
     const res = await fetch(`${origin}/api/cue`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...buildBridgeAuthHeaders(token),
+      },
       body: JSON.stringify(payload),
     });
     const data = (await res.json().catch(() => ({}))) as {
@@ -244,13 +267,17 @@ export async function sendCueToBridge(
 }
 
 export async function fetchBridgeState(
-  bridgeOrigin: string
+  bridgeOrigin: string,
+  token?: string
 ): Promise<BridgeHealthResult> {
   const origin = normalizeBridgeOrigin(bridgeOrigin);
   try {
     const res = await fetch(`${origin}/api/state`, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...buildBridgeAuthHeaders(token),
+      },
       signal: AbortSignal.timeout(2500),
     });
     if (!res.ok) {
