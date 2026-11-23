@@ -7,7 +7,9 @@ import {
 } from "./server/dispatcher.ts";
 import {
   createBridgeHandler,
+  isAllowedHost,
   resolveClientBundlePath,
+  sendJson,
   type BridgeHandler,
 } from "./server/handler.ts";
 import { SUPPORTED_AGENTS, type AgentId } from "./shared/types.ts";
@@ -108,6 +110,43 @@ function normalizeMountPath(viteBase: string, rawBasePath: string): string {
   return `${cleanViteBase}${cleanMount}`;
 }
 
+function isSameOriginRequest(
+  req: IncomingMessage,
+  allowedHosts?: string[]
+): boolean {
+  const host = req.headers.host;
+  if (!isAllowedHost(host, allowedHosts)) {
+    return false;
+  }
+  const rawOrigin = req.headers.origin;
+  const originHeader = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+  if (originHeader !== undefined) {
+    const trimmed = originHeader.trim().replace(/\/+$/, "");
+    if (!trimmed || trimmed === "null") return false;
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return false;
+      }
+      if (parsed.host.toLowerCase() !== host!.trim().toLowerCase()) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+  const secFetchSite = req.headers["sec-fetch-site"];
+  const site = Array.isArray(secFetchSite) ? secFetchSite[0] : secFetchSite;
+  if (
+    site !== undefined &&
+    site !== "same-origin" &&
+    site !== "none"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function agentcue(
   options: AgentcueViteOptions = {}
 ): AgentcueVitePlugin {
@@ -116,6 +155,10 @@ export function agentcue(
   let resolvedRoot = process.cwd();
   let mountPath = normalizeMountPath("/", rawBasePath);
   let activeBridge: BridgeHandler | null = null;
+  const resolveExpectedToken = () =>
+    options.token !== undefined
+      ? options.token.trim() || undefined
+      : process.env.AGENTCUE_TOKEN?.trim() || undefined;
 
   return {
     name: "vite-plugin-agentcue",
@@ -156,6 +199,29 @@ export function agentcue(
       activeBridge = bridge;
 
       server.middlewares.use((req, res, next) => {
+        const expectedToken = resolveExpectedToken();
+        if (expectedToken) {
+          const rawOrigin = req.headers.origin;
+          const originHeader = Array.isArray(rawOrigin)
+            ? rawOrigin[0]
+            : rawOrigin;
+          if (!isSameOriginRequest(req, options.allowedHosts)) {
+            const rawUrl = req.url || "/";
+            const isBridgeSubPath =
+              rawUrl === mountPath ||
+              rawUrl.startsWith(`${mountPath}/`) ||
+              rawUrl.startsWith(`${mountPath}?`);
+            if (!isBridgeSubPath && originHeader !== undefined) {
+              res.removeHeader?.("Access-Control-Allow-Origin");
+              res.removeHeader?.("Access-Control-Allow-Credentials");
+              sendJson(res, 403, {
+                ok: false,
+                error: "Forbidden cross-origin request in token mode",
+              });
+              return;
+            }
+          }
+        }
         bridge.middleware(req, res, next);
       });
 
@@ -174,8 +240,12 @@ export function agentcue(
               ? `\x1b[32m✓ ${a}\x1b[0m`
               : `\x1b[90m✗ ${a}\x1b[0m`
           ).join("  ");
+          const expectedToken = resolveExpectedToken();
+          const tokenNote = expectedToken
+            ? ` · token: \x1b[33m?agentcue_token=${expectedToken}\x1b[0m`
+            : "";
           server.config.logger.info(
-            `  \x1b[36m➜\x1b[0m  \x1b[1magentcue\x1b[0m: press \x1b[1mCmd/Ctrl + Shift + F\x1b[0m in browser · ${agentList}`
+            `  \x1b[36m➜\x1b[0m  \x1b[1magentcue\x1b[0m: press \x1b[1mCmd/Ctrl + Shift + F\x1b[0m in browser · ${agentList}${tokenNote}`
           );
         };
       }
@@ -183,16 +253,11 @@ export function agentcue(
 
     transformIndexHtml() {
       if (!enabled) return [];
-      const expectedToken =
-        options.token !== undefined
-          ? options.token.trim() || undefined
-          : process.env.AGENTCUE_TOKEN?.trim() || undefined;
       return [
         {
           tag: "script",
           attrs: {
             src: `${mountPath}/client.js`,
-            ...(expectedToken ? { "data-token": expectedToken } : {}),
             defer: true,
           },
           injectTo: "body",

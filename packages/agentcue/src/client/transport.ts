@@ -40,6 +40,35 @@ export interface OverlayInstance {
   destroy: () => void;
 }
 
+export const STORAGE_TOKEN_KEY = "agentcue:bridge-token";
+
+function readBrowserStoredToken(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const url = new URL(window.location.href);
+    const paramToken = url.searchParams.get("agentcue_token")?.trim();
+    if (paramToken) {
+      try {
+        sessionStorage.setItem(STORAGE_TOKEN_KEY, paramToken);
+      } catch {
+        // ignore storage errors
+      }
+      return paramToken;
+    }
+  } catch {
+    // ignore URL errors
+  }
+  try {
+    const stored =
+      sessionStorage.getItem(STORAGE_TOKEN_KEY)?.trim() ||
+      localStorage.getItem(STORAGE_TOKEN_KEY)?.trim();
+    if (stored) return stored;
+  } catch {
+    // ignore storage errors
+  }
+  return undefined;
+}
+
 export function createHttpBridgeTransport(
   getOrigin: string | (() => string),
   getToken?: string | (() => string | undefined)
@@ -50,8 +79,10 @@ export function createHttpBridgeTransport(
     if (typeof getToken === "function") return getToken();
     if (typeof getToken === "string") return getToken;
     if (typeof window !== "undefined") {
-      return (window as Window & { __AGENTCUE_TOKEN__?: string })
-        .__AGENTCUE_TOKEN__;
+      const globalToken = (window as Window & { __AGENTCUE_TOKEN__?: string })
+        .__AGENTCUE_TOKEN__?.trim();
+      if (globalToken) return globalToken;
+      return readBrowserStoredToken();
     }
     return undefined;
   };

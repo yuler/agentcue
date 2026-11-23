@@ -29,18 +29,14 @@ export interface MockEvent {
   composedPath: () => unknown[];
 }
 
-export function makeEvent(
-  type: string,
-  opts: Partial<MockEvent> & { path?: unknown[] } = {}
-): MockEvent {
+export function makeEvent(type: string, opts: Partial<MockEvent> & { path?: unknown[] } = {}): MockEvent {
   const evt: MockEvent = {
     type, target: opts.target ?? null, bubbles: opts.bubbles ?? false, isTrusted: opts.isTrusted ?? false,
     detail: opts.detail, key: opts.key, code: opts.code,
     metaKey: opts.metaKey ?? false, ctrlKey: opts.ctrlKey ?? false, shiftKey: opts.shiftKey ?? false, altKey: opts.altKey ?? false,
     clientX: opts.clientX ?? 0, clientY: opts.clientY ?? 0, defaultPrevented: false,
     preventDefault() { evt.defaultPrevented = true; },
-    stopPropagation() {}, stopImmediatePropagation() {},
-    composedPath: () => opts.path ?? [evt.target],
+    stopPropagation() {}, stopImmediatePropagation() {}, composedPath: () => opts.path ?? [evt.target],
   };
   return evt;
 }
@@ -323,9 +319,7 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
       setBadgeBackgroundColor: async () => {},
     },
     scripting: {
-      executeScript: async (inj: {
-        files?: string[]; func?: (...args: unknown[]) => unknown; args?: unknown[]; world?: string;
-      }) => {
+      executeScript: async (inj: { files?: string[]; func?: (...args: unknown[]) => unknown; args?: unknown[]; world?: string }) => {
         if (typeof inj.func === "function") return [{ result: inj.func(...(inj.args || [])) }];
         for (const file of inj.files || []) {
           injectedFiles.push({ file, world: inj.world });
@@ -338,19 +332,12 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
     storage: {
       local: {
         get: async (key?: string | string[] | null) => {
-          if (Array.isArray(key)) {
-            const out: Record<string, unknown> = {};
-            for (const k of key) out[k] = storageData[k];
-            return out;
-          }
+          if (Array.isArray(key)) { const out: Record<string, unknown> = {}; for (const k of key) out[k] = storageData[k]; return out; }
           return key ? { [key]: storageData[key] } : { ...storageData };
         },
         set: async (items: Record<string, unknown>) => {
           const changes: Record<string, { oldValue?: unknown; newValue?: unknown }> = {};
-          for (const [k, v] of Object.entries(items)) {
-            changes[k] = { oldValue: storageData[k], newValue: v };
-            storageData[k] = v;
-          }
+          for (const [k, v] of Object.entries(items)) { changes[k] = { oldValue: storageData[k], newValue: v }; storageData[k] = v; }
           for (const fn of [...storageListeners]) fn(changes, "local");
         },
       },

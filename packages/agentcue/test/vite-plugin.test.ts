@@ -65,7 +65,6 @@ describe("agentcue/vite plugin", () => {
         tag: "script",
         attrs: {
           src: "/__agentcue/client.js",
-          "data-token": "vite-secret-token",
           defer: true,
         },
         injectTo: "body",
@@ -271,5 +270,124 @@ describe("agentcue/vite plugin", () => {
       httpServer.close((err) => (err ? reject(err) : resolve()));
       httpServer.closeAllConnections?.();
     });
+  });
+
+  it("never exposes bridge token in real Vite HTML/client responses across loopback origins while paired clients authenticate", async () => {
+    const { createServer: createViteServer } = await import("vite");
+    const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { createHttpBridgeTransport } = await import(
+      "../src/client/transport.ts"
+    );
+
+    const tmpRoot = mkdtempSync(join(tmpdir(), "agentcue-vite-sec-"));
+    writeFileSync(
+      join(tmpRoot, "index.html"),
+      "<!doctype html><html><head><title>Vite App</title></head><body><div id=\"app\">Hello</div></body></html>",
+      "utf-8"
+    );
+
+    const secretToken = "real-vite-token-9988776655";
+    const executed: AgentInvocation[] = [];
+
+    const viteServer = await createViteServer({
+      root: tmpRoot,
+      configFile: false,
+      logLevel: "silent",
+      server: {
+        host: "127.0.0.1",
+        port: 0,
+      },
+      plugins: [
+        agentcue({
+          agents: ["agy"],
+          defaultAgent: "agy",
+          token: secretToken,
+          clientScript: "window.__VITE_CLIENT_OK__ = true;",
+          executor: async (inv) => {
+            executed.push(inv);
+            return { ok: true, exitCode: 0 };
+          },
+        }),
+      ],
+    });
+
+    await viteServer.listen();
+    const addr = viteServer.httpServer?.address();
+    assert.ok(addr && typeof addr === "object");
+    const viteOrigin = `http://127.0.0.1:${addr.port}`;
+    const otherLoopbackOrigin = "http://localhost:49999";
+
+    try {
+      // 1. Same-origin HTML response must NOT contain the secret token
+      const sameOriginHtmlRes = await fetch(`${viteOrigin}/`);
+      assert.equal(sameOriginHtmlRes.status, 200);
+      const sameOriginHtml = await sameOriginHtmlRes.text();
+      assert.ok(sameOriginHtml.includes("/__agentcue/client.js"));
+      assert.equal(
+        sameOriginHtml.includes(secretToken),
+        false,
+        "Vite index.html must never embed the bridge token"
+      );
+      assert.equal(
+        sameOriginHtml.includes("data-token"),
+        false,
+        "Vite index.html must not include data-token attribute"
+      );
+
+      // 2. Cross-origin loopback request to Vite HTML is rejected (403) and never leaks token
+      const crossLoopbackHtmlRes = await fetch(`${viteOrigin}/`, {
+        headers: {
+          Origin: otherLoopbackOrigin,
+          "Sec-Fetch-Site": "cross-site",
+        },
+      });
+      assert.equal(crossLoopbackHtmlRes.status, 403);
+      assert.equal(
+        crossLoopbackHtmlRes.headers.get("access-control-allow-origin"),
+        null
+      );
+      const crossLoopbackBody = await crossLoopbackHtmlRes.text();
+      assert.equal(crossLoopbackBody.includes(secretToken), false);
+
+      // 3. Cross-origin loopback request to /__agentcue/client.js never contains the token
+      const crossLoopbackClientRes = await fetch(
+        `${viteOrigin}/__agentcue/client.js`,
+        {
+          headers: { Origin: otherLoopbackOrigin },
+        }
+      );
+      assert.equal(crossLoopbackClientRes.status, 200);
+      const clientJs = await crossLoopbackClientRes.text();
+      assert.equal(clientJs.includes(secretToken), false);
+      assert.equal(clientJs.includes("__AGENTCUE_TOKEN__"), false);
+
+      // 4. Unauthenticated API call fails closed with 401
+      const unauthCue = await fetch(`${viteOrigin}/__agentcue/api/cue`, {
+        method: "POST",
+        headers: {
+          Origin: otherLoopbackOrigin,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(sampleViteCue),
+      });
+      assert.equal(unauthCue.status, 401);
+      assert.equal(executed.length, 0);
+
+      // 5. Intended paired client (with token provisioned via ?agentcue_token / transport) succeeds
+      const pairedTransport = createHttpBridgeTransport(
+        `${viteOrigin}/__agentcue`,
+        secretToken
+      );
+      const dispatchRes = await pairedTransport.sendCue(sampleViteCue);
+      assert.equal(dispatchRes.ok, true);
+      assert.equal(dispatchRes.status, 202);
+      await new Promise((r) => setTimeout(r, 30));
+      assert.equal(executed.length, 1);
+    } finally {
+      await viteServer.close();
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 });

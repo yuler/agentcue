@@ -52,6 +52,30 @@ function resolveToken(): string | undefined {
       // fall through
     }
   }
+  if (typeof window !== "undefined") {
+    try {
+      const pageUrl = new URL(window.location.href);
+      const paramToken = pageUrl.searchParams.get("agentcue_token")?.trim();
+      if (paramToken) {
+        try {
+          sessionStorage.setItem("agentcue:bridge-token", paramToken);
+        } catch {
+          // ignore storage errors
+        }
+        return paramToken;
+      }
+    } catch {
+      // ignore URL errors
+    }
+    try {
+      const stored =
+        sessionStorage.getItem("agentcue:bridge-token")?.trim() ||
+        localStorage.getItem("agentcue:bridge-token")?.trim();
+      if (stored) return stored;
+    } catch {
+      // ignore storage errors
+    }
+  }
   return undefined;
 }
 
