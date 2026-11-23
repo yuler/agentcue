@@ -41,16 +41,33 @@ export interface OverlayInstance {
 }
 
 export function createHttpBridgeTransport(
-  getOrigin: string | (() => string)
+  getOrigin: string | (() => string),
+  getToken?: string | (() => string | undefined)
 ): BridgeTransport {
   const resolveOrigin = () =>
     (typeof getOrigin === "function" ? getOrigin() : getOrigin).replace(/\/+$/, "");
+  const resolveToken = () => {
+    if (typeof getToken === "function") return getToken();
+    if (typeof getToken === "string") return getToken;
+    if (typeof window !== "undefined") {
+      return (window as Window & { __AGENTCUE_TOKEN__?: string })
+        .__AGENTCUE_TOKEN__;
+    }
+    return undefined;
+  };
 
   return {
     async sendCue(payload: CuePayload): Promise<CueDispatchResult> {
+      const token = resolveToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["X-Agentcue-Token"] = token;
+      }
       const res = await fetch(`${resolveOrigin()}/api/cue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -67,7 +84,11 @@ export function createHttpBridgeTransport(
       };
     },
     subscribeEvents(handlers: BridgeTransportHandlers): () => void {
-      const es = new EventSource(`${resolveOrigin()}/api/events`);
+      const token = resolveToken();
+      const eventsUrl = token
+        ? `${resolveOrigin()}/api/events?token=${encodeURIComponent(token)}`
+        : `${resolveOrigin()}/api/events`;
+      const es = new EventSource(eventsUrl);
       es.onopen = () => handlers.onOpen();
       es.onmessage = (msg) => {
         try {

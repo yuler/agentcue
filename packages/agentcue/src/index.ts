@@ -10,11 +10,16 @@ export {
   type AgentExecutor,
   type AgentInvocation,
   type AgentRunResult,
+  type BuildAgentCommandOptions,
   type Dispatcher,
   type DispatcherOptions,
 } from "./server/dispatcher.ts";
 export {
+  buildCorsHeaders,
   createBridgeHandler,
+  isAllowedHost,
+  isAllowedOrigin,
+  isLoopbackHost,
   type BridgeHandler,
   type BridgeHandlerOptions,
 } from "./server/handler.ts";

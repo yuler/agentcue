@@ -8,6 +8,8 @@ interface CliArgs {
   host: string;
   cwd: string;
   defaultAgent?: AgentId;
+  token?: string;
+  unsafeSkipPermissions: boolean;
   help: boolean;
   version: boolean;
 }
@@ -17,6 +19,8 @@ function parseCliArgs(argv: string[]): CliArgs {
   let host = "127.0.0.1";
   let cwd = process.cwd();
   let defaultAgent: AgentId | undefined;
+  let token = process.env.AGENTCUE_TOKEN?.trim() || undefined;
+  let unsafeSkipPermissions = false;
   let help = false;
   let version = false;
 
@@ -37,6 +41,12 @@ function parseCliArgs(argv: string[]): CliArgs {
     } else if (arg === "-a" || arg === "--agent") {
       const candidate = argv[++i] as AgentId;
       if (SUPPORTED_AGENTS.includes(candidate)) defaultAgent = candidate;
+    } else if (arg === "--token") {
+      token = argv[++i]?.trim() || undefined;
+    } else if (arg.startsWith("--token=")) {
+      token = arg.slice("--token=".length).trim() || undefined;
+    } else if (arg === "--unsafe-skip-permissions") {
+      unsafeSkipPermissions = true;
     } else if (!arg.startsWith("-")) {
       const normalized = arg === "cursor" ? "cursor-agent" : arg;
       if (SUPPORTED_AGENTS.includes(normalized as AgentId)) {
@@ -45,7 +55,16 @@ function parseCliArgs(argv: string[]): CliArgs {
     }
   }
 
-  return { port, host, cwd, defaultAgent, help, version };
+  return {
+    port,
+    host,
+    cwd,
+    defaultAgent,
+    token,
+    unsafeSkipPermissions,
+    help,
+    version,
+  };
 }
 
 function printHelp() {
@@ -59,12 +78,14 @@ Agents:
   agy | claude | cursor-agent | codex | pi
 
 Options:
-  -p, --port <port>    Local bridge port (default: 4318)
-  -a, --agent <agent>  Default selected Agent Target
-  -C, --cwd <dir>      Target workspace directory (default: current directory)
-  --host <host>        Bind host (default: 127.0.0.1)
-  -v, --version        Show version number
-  -h, --help           Show this help message
+  -p, --port <port>            Local bridge port (default: 4318)
+  -a, --agent <agent>          Default selected Agent Target
+  -C, --cwd <dir>              Target workspace directory (default: current directory)
+  --host <host>                Bind host (default: 127.0.0.1)
+  --token <token>              Require authentication token for bridge API requests
+  --unsafe-skip-permissions    Opt in to agent CLI permission/sandbox bypass flags
+  -v, --version                Show version number
+  -h, --help                   Show this help message
 `);
 }
 
@@ -88,6 +109,8 @@ async function main() {
         host: args.host,
         cwd: args.cwd,
         defaultAgent: args.defaultAgent,
+        token: args.token,
+        unsafeSkipPermissions: args.unsafeSkipPermissions,
       });
       break;
     } catch (err) {

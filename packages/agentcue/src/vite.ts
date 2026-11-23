@@ -34,6 +34,14 @@ export interface AgentcueViteOptions {
   clientScript?: string;
   /** Suppress the startup line printed beneath Vite's server URLs. */
   quiet?: boolean;
+  /** Optional authentication token required for bridge API requests. */
+  token?: string;
+  /** Additional allowed CORS origins beyond loopback and browser extensions. */
+  allowedOrigins?: string[];
+  /** Additional allowed Host header values beyond loopback. */
+  allowedHosts?: string[];
+  /** Explicitly opt in to agent CLI permission/sandbox bypass flags. */
+  unsafeSkipPermissions?: boolean;
 }
 
 export interface AgentcueHtmlTagDescriptor {
@@ -131,6 +139,7 @@ export function agentcue(
         agents: options.agents,
         defaultAgent: options.defaultAgent,
         executor: options.executor,
+        unsafeSkipPermissions: options.unsafeSkipPermissions,
       });
 
       activeBridge?.dispose();
@@ -140,6 +149,9 @@ export function agentcue(
         clientOrigin: mountPath,
         clientScript: options.clientScript,
         clientBundlePath: resolveClientBundlePath(),
+        token: options.token,
+        allowedOrigins: options.allowedOrigins,
+        allowedHosts: options.allowedHosts,
       });
       activeBridge = bridge;
 

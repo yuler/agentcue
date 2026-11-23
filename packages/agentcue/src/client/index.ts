@@ -3,6 +3,7 @@ import { mountOverlay } from "./overlay.ts";
 declare global {
   interface Window {
     __AGENTCUE_ORIGIN__?: string;
+    __AGENTCUE_TOKEN__?: string;
     __AGENTCUE_INSTANCE__?: {
       togglePickMode: () => void;
       setActive?: (next: boolean) => void;

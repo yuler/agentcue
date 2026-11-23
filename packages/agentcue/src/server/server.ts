@@ -96,6 +96,10 @@ export interface ServerOptions {
   agents?: AgentId[];
   executor?: AgentExecutor;
   clientScript?: string;
+  token?: string;
+  allowedOrigins?: string[];
+  allowedHosts?: string[];
+  unsafeSkipPermissions?: boolean;
 }
 
 export interface RunningServer {
@@ -118,11 +122,17 @@ export async function startServer(
     agents: options.agents,
     defaultAgent: options.defaultAgent,
     executor: options.executor,
+    unsafeSkipPermissions: options.unsafeSkipPermissions,
   });
 
   let boundPort = requestedPort;
   const getOrigin = () =>
     `http://${host === "127.0.0.1" ? "localhost" : host}:${boundPort}`;
+
+  const allowedHosts = [
+    ...(options.allowedHosts ?? []),
+    ...(host !== "0.0.0.0" && host !== "::" && host !== "[::]" ? [host] : []),
+  ];
 
   const bridge = createBridgeHandler({
     dispatcher,
@@ -130,6 +140,9 @@ export async function startServer(
     clientOrigin: getOrigin,
     clientScript: options.clientScript,
     clientBundlePath: resolveClientBundlePath(),
+    token: options.token,
+    allowedOrigins: options.allowedOrigins,
+    allowedHosts,
   });
 
   const server = createServer((req, res) => {

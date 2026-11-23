@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,16 +11,129 @@ import {
   type ServerEvent,
 } from "../shared/types.ts";
 
-export const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Private-Network": "true",
-};
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
-export function sendJson(res: ServerResponse, status: number, body: unknown) {
+function normalizeHostToken(value: string): string {
+  return value.trim().toLowerCase().replace(/^\[|\]$/g, "");
+}
+
+export function isLoopbackHost(
+  hostname: string,
+  allowedHosts?: string[]
+): boolean {
+  const lower = hostname.trim().toLowerCase();
+  if (LOOPBACK_HOSTS.has(lower)) return true;
+  const bare = normalizeHostToken(lower);
+  if (LOOPBACK_HOSTS.has(bare)) return true;
+  if (allowedHosts && allowedHosts.length > 0) {
+    for (const candidate of allowedHosts) {
+      if (candidate && normalizeHostToken(candidate) === bare) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function isAllowedHost(
+  hostHeader: string | undefined,
+  allowedHosts?: string[]
+): boolean {
+  if (!hostHeader) return false;
+  const raw = hostHeader.trim();
+  if (!raw || /[/?#@\\\s]/.test(raw)) return false;
+  if (raw.toLowerCase() === "::1") return true;
+  try {
+    const parsed = new URL(`http://${raw}`);
+    if (
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      (parsed.pathname !== "/" && parsed.pathname !== "") ||
+      parsed.search !== "" ||
+      parsed.hash !== ""
+    ) {
+      return false;
+    }
+    return isLoopbackHost(parsed.hostname, allowedHosts);
+  } catch {
+    return false;
+  }
+}
+
+export function isAllowedOrigin(
+  originHeader: string,
+  allowedOrigins?: string[],
+  allowedHosts?: string[]
+): boolean {
+  const trimmed = originHeader.trim();
+  if (!trimmed || trimmed === "null" || /\s/.test(trimmed)) return false;
+  const normalized = trimmed.replace(/\/+$/, "");
+
+  if (allowedOrigins && allowedOrigins.length > 0) {
+    for (const candidate of allowedOrigins) {
+      if (candidate && candidate.trim().replace(/\/+$/, "") === normalized) {
+        return true;
+      }
+    }
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      (parsed.pathname !== "/" && parsed.pathname !== "") ||
+      parsed.search !== "" ||
+      parsed.hash !== ""
+    ) {
+      return false;
+    }
+
+    if (
+      parsed.protocol === "chrome-extension:" ||
+      parsed.protocol === "moz-extension:"
+    ) {
+      return (
+        Boolean(parsed.hostname) &&
+        /^[a-zA-Z0-9_-]+$/.test(parsed.hostname) &&
+        normalized === `${parsed.protocol}//${parsed.host}`
+      );
+    }
+
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return (
+        normalized === parsed.origin &&
+        isLoopbackHost(parsed.hostname, allowedHosts)
+      );
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function buildCorsHeaders(origin?: string): Record<string, string> {
+  if (!origin) {
+    return { Vary: "Origin" };
+  }
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Agentcue-Token",
+    Vary: "Origin",
+  };
+}
+
+export function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  corsHeaders?: Record<string, string>
+) {
   res.writeHead(status, {
-    ...CORS_HEADERS,
+    ...corsHeaders,
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
   });
@@ -165,6 +279,9 @@ export interface BridgeHandlerOptions {
   clientOrigin: string | (() => string);
   clientScript?: string;
   clientBundlePath?: string;
+  token?: string;
+  allowedOrigins?: string[];
+  allowedHosts?: string[];
 }
 
 export interface BridgeHandler {
@@ -176,30 +293,81 @@ export interface BridgeHandler {
   dispose: () => void;
 }
 
+function extractRequestToken(
+  req: IncomingMessage,
+  urlObj: URL
+): string | undefined {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === "string") {
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (match && match[1].trim()) return match[1].trim();
+  }
+  const headerToken = req.headers["x-agentcue-token"];
+  if (typeof headerToken === "string" && headerToken.trim()) {
+    return headerToken.trim();
+  }
+  const queryToken = urlObj.searchParams.get("token");
+  if (queryToken && queryToken.trim()) {
+    return queryToken.trim();
+  }
+  return undefined;
+}
+
+function verifyToken(
+  provided: string | undefined,
+  expected: string
+): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided, "utf-8");
+  const b = Buffer.from(expected, "utf-8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export function createBridgeHandler(
   options: BridgeHandlerOptions
 ): BridgeHandler {
   const prefix = (options.basePath || "").replace(/\/+$/, "");
   const bundlePath = options.clientBundlePath ?? resolveClientBundlePath();
   const activeCleanups = new Set<() => void>();
+  const resolveExpectedToken = () => {
+    if (options.token !== undefined) {
+      return options.token.trim() || undefined;
+    }
+    return process.env.AGENTCUE_TOKEN?.trim() || undefined;
+  };
 
-  async function handleCuePost(req: IncomingMessage, res: ServerResponse) {
+  async function handleCuePost(
+    req: IncomingMessage,
+    res: ServerResponse,
+    corsHeaders: Record<string, string>
+  ) {
     try {
       const rawBody = await readJsonBody(req);
       const state = options.dispatcher.getState();
       const payload = validateCuePayload(rawBody, state.agents);
       const queued = options.dispatcher.enqueue(payload);
-      sendJson(res, 202, {
-        ok: true,
-        cueId: queued.cueId,
-        queuePosition: queued.queuePosition,
-      });
+      sendJson(
+        res,
+        202,
+        {
+          ok: true,
+          cueId: queued.cueId,
+          queuePosition: queued.queuePosition,
+        },
+        corsHeaders
+      );
     } catch (err) {
       const status = err instanceof QueueFullError ? 429 : 400;
-      sendJson(res, status, {
-        ok: false,
-        error: err instanceof Error ? err.message : "Bad request",
-      });
+      sendJson(
+        res,
+        status,
+        {
+          ok: false,
+          error: err instanceof Error ? err.message : "Bad request",
+        },
+        corsHeaders
+      );
     }
   }
 
@@ -225,11 +393,34 @@ export function createBridgeHandler(
       subPath = pathname.slice(prefix.length) || "/";
     }
 
+    if (!isAllowedHost(req.headers.host, options.allowedHosts)) {
+      sendJson(res, 403, { ok: false, error: "Forbidden host" });
+      return;
+    }
+
+    const rawOrigin = req.headers.origin;
+    const originHeader = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+    if (
+      originHeader !== undefined &&
+      !isAllowedOrigin(
+        originHeader,
+        options.allowedOrigins,
+        options.allowedHosts
+      )
+    ) {
+      sendJson(res, 403, { ok: false, error: "Forbidden origin" });
+      return;
+    }
+
+    const corsHeaders = buildCorsHeaders(originHeader);
+
     if (method === "OPTIONS") {
-      res.writeHead(204, CORS_HEADERS);
+      res.writeHead(204, corsHeaders);
       res.end();
       return;
     }
+
+    const expectedToken = resolveExpectedToken();
 
     if (method === "GET" && subPath === "/client.js") {
       const origin =
@@ -241,9 +432,12 @@ export function createBridgeHandler(
         (existsSync(bundlePath)
           ? readFileSync(bundlePath, "utf-8")
           : "console.error('[agentcue] dist/client.js not built yet.');");
-      const injected = `window.__AGENTCUE_ORIGIN__=${JSON.stringify(origin)};\n${scriptBody}`;
+      const tokenAssignment = expectedToken
+        ? `window.__AGENTCUE_TOKEN__=${JSON.stringify(expectedToken)};\n`
+        : "";
+      const injected = `window.__AGENTCUE_ORIGIN__=${JSON.stringify(origin)};\n${tokenAssignment}${scriptBody}`;
       res.writeHead(200, {
-        ...CORS_HEADERS,
+        ...corsHeaders,
         "Content-Type": "application/javascript; charset=utf-8",
         "Cache-Control": "no-store",
       });
@@ -251,14 +445,27 @@ export function createBridgeHandler(
       return;
     }
 
+    const isApiRoute =
+      subPath === "/api/state" ||
+      subPath === "/api/events" ||
+      subPath === "/api/cue";
+
+    if (isApiRoute && expectedToken) {
+      const providedToken = extractRequestToken(req, urlObj);
+      if (!verifyToken(providedToken, expectedToken)) {
+        sendJson(res, 401, { ok: false, error: "Unauthorized" }, corsHeaders);
+        return;
+      }
+    }
+
     if (method === "GET" && subPath === "/api/state") {
-      sendJson(res, 200, options.dispatcher.getState());
+      sendJson(res, 200, options.dispatcher.getState(), corsHeaders);
       return;
     }
 
     if (method === "GET" && subPath === "/api/events") {
       res.writeHead(200, {
-        ...CORS_HEADERS,
+        ...corsHeaders,
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         "X-Accel-Buffering": "no",
@@ -301,19 +508,19 @@ export function createBridgeHandler(
     }
 
     if (method === "POST" && subPath === "/api/cue") {
-      void handleCuePost(req, res);
+      void handleCuePost(req, res, corsHeaders);
       return;
     }
 
     if (prefix) {
-      sendJson(res, 404, { error: "Not found" });
+      sendJson(res, 404, { error: "Not found" }, corsHeaders);
       return;
     }
 
     if (next) {
       next();
     } else {
-      sendJson(res, 404, { error: "Not found" });
+      sendJson(res, 404, { error: "Not found" }, corsHeaders);
     }
   }
 
