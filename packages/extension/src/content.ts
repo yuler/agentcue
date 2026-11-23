@@ -15,6 +15,7 @@ import {
   DEFAULT_EXTENSION_SETTINGS,
   HINT_REQUEST_EVENT,
   HINT_RESPONSE_EVENT,
+  isLocalhostUrl,
   normalizeSettings,
   sanitizeFrameworkHints,
   SSE_PORT_NAME,
@@ -155,7 +156,7 @@ export function initContentBridge(): void {
   let capturedHints: FrameworkHints | undefined;
 
   document.addEventListener(HINT_RESPONSE_EVENT, (evt: Event) => {
-    if (!listeningHints) return;
+    if (!listeningHints || !isLocalhostUrl(window.location?.href)) return;
     const custom = evt as CustomEvent<unknown>;
     const sanitized = sanitizeFrameworkHints(custom.detail);
     if (sanitized.sourceHint || sanitized.componentStack) {
@@ -164,6 +165,9 @@ export function initContentBridge(): void {
   });
 
   function requestMainWorldHints(el: Element): FrameworkHints | undefined {
+    if (!isLocalhostUrl(window.location?.href)) {
+      return undefined;
+    }
     capturedHints = undefined;
     listeningHints = true;
     try {

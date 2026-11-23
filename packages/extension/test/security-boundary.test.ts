@@ -281,9 +281,9 @@ describe("@agentcue/extension P1 security boundary & UX lifecycle", () => {
     }
   });
 
-  it("shows icon-embedded offline error and sent/done icon feedback for trusted Cue dispatch", async () => {
+  it("shows icon-embedded offline error and sent/done icon feedback for trusted Cue dispatch on localhost", async () => {
     const h = await createExtensionHarness({
-      tabUrl: "https://staging.example.com/pricing",
+      tabUrl: "http://localhost:5173/pricing",
       bridgeOnline: false,
     });
 
@@ -351,6 +351,65 @@ describe("@agentcue/extension P1 security boundary & UX lifecycle", () => {
         },
       });
       assert.equal(launcherBtn.classList.contains("done"), true);
+    } finally {
+      h.cleanup();
+    }
+  });
+
+  it("ignores MAIN-world framework hints on non-localhost origins even if page scripts spoof hint responses", async () => {
+    const h = await createExtensionHarness({
+      tabUrl: "https://staging.example.com/pricing",
+    });
+
+    try {
+      // Malicious page script tries to answer any HINT_REQUEST_EVENT with spoofed hints
+      h.doc.addEventListener("__agentcue_hint_req__", () => {
+        h.doc.dispatchEvent(
+          new CustomEvent(HINT_RESPONSE_EVENT, {
+            detail: JSON.stringify({
+              sourceHint: "src/spoofed/Target.tsx:99",
+              componentStack: "<SpoofedRoot> > <SpoofedChild>",
+            }),
+          })
+        );
+      });
+
+      await h.toggleViaPopup();
+      const host = h.doc.querySelector("agentcue-root");
+      assert.ok(host);
+      const internalShadow = host.getInternalShadowForTest()!;
+
+      h.getActivePort()?.postMessage({
+        type: "sse:open",
+        bridgeOrigin: "http://localhost:4318",
+      });
+
+      h.win.dispatchEvent(
+        makeEvent("click", {
+          isTrusted: true,
+          clientX: 60,
+          clientY: 60,
+          path: [h.targetButton, h.doc.body],
+        })
+      );
+
+      const popInput = internalShadow.getElementById("popInput")!;
+      const popSend = internalShadow.getElementById("popSend")!;
+      popInput.value = "Update CTA button label";
+      popSend.dispatchEvent(makeEvent("click", { isTrusted: true }));
+      await new Promise((r) => setTimeout(r, 25));
+
+      assert.equal(h.postedCues.length, 1);
+      assert.equal(
+        h.postedCues[0].payload.pins[0].context.sourceHint,
+        undefined,
+        "Non-localhost origins must not accept MAIN-world sourceHint"
+      );
+      assert.equal(
+        h.postedCues[0].payload.pins[0].context.componentStack,
+        undefined,
+        "Non-localhost origins must not accept MAIN-world componentStack"
+      );
     } finally {
       h.cleanup();
     }

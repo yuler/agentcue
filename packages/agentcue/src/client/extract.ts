@@ -1,3 +1,7 @@
+import {
+  sanitizeComponentStack,
+  sanitizeSourceHint,
+} from "../shared/prompt.ts";
 import type { PinContext } from "../shared/types.ts";
 
 const STYLE_KEYS = [
@@ -256,13 +260,35 @@ export function detectMainWorldFrameworkHints(el: Element): FrameworkHints {
   }
 
   return {
-    sourceHint,
+    sourceHint: sanitizeSourceHint(sourceHint),
     componentStack:
-      components.length > 0 ? components.join(" > ") : undefined,
+      components.length > 0
+        ? sanitizeComponentStack(components.join(" > "))
+        : undefined,
   };
 }
 
+function isLocalDevWindow(el: Element): boolean {
+  const href = el.ownerDocument?.defaultView?.location?.href;
+  if (!href) return true;
+  try {
+    const u = new URL(href);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    return (
+      u.hostname === "localhost" ||
+      u.hostname === "127.0.0.1" ||
+      u.hostname === "[::1]" ||
+      u.hostname.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function detectFrameworkHints(el: Element): FrameworkHints {
+  if (!isLocalDevWindow(el)) {
+    return {};
+  }
   let sourceHint: string | undefined;
 
   // Standard / framework dev data attributes (walk up to body)
@@ -297,8 +323,8 @@ export function detectFrameworkHints(el: Element): FrameworkHints {
 
   const mainWorld = detectMainWorldFrameworkHints(el);
   return {
-    sourceHint: sourceHint ?? mainWorld.sourceHint,
-    componentStack: mainWorld.componentStack,
+    sourceHint: sanitizeSourceHint(sourceHint ?? mainWorld.sourceHint),
+    componentStack: sanitizeComponentStack(mainWorld.componentStack),
   };
 }
 
@@ -327,8 +353,9 @@ export function extractPinContext(
   if ((!sourceHint || !componentStack) && resolveFrameworkHints) {
     const extra = resolveFrameworkHints(el);
     if (extra) {
-      sourceHint = sourceHint ?? extra.sourceHint;
-      componentStack = componentStack ?? extra.componentStack;
+      sourceHint = sourceHint ?? sanitizeSourceHint(extra.sourceHint);
+      componentStack =
+        componentStack ?? sanitizeComponentStack(extra.componentStack);
     }
   }
 

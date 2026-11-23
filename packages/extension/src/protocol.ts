@@ -1,6 +1,10 @@
 import type { FrameworkHints } from "../../agentcue/src/client/extract.ts";
 import type { CueDispatchResult } from "../../agentcue/src/client/transport.ts";
 import {
+  sanitizeComponentStack,
+  sanitizeSourceHint,
+} from "../../agentcue/src/shared/prompt.ts";
+import {
   SUPPORTED_AGENTS,
   type AgentId,
   type CuePayload,
@@ -16,8 +20,6 @@ export const SSE_PORT_NAME = "agentcue-sse";
 /** Read-only DOM events for extracting optional MAIN-world framework hints (never carries commands). */
 export const HINT_REQUEST_EVENT = "__agentcue_hint_req__";
 export const HINT_RESPONSE_EVENT = "__agentcue_hint_res__";
-
-const MAX_HINT_LENGTH = 200;
 
 export interface ExtensionSettings {
   bridgeOrigin: string;
@@ -88,21 +90,10 @@ export interface BridgeHealthResult {
   error?: string;
 }
 
-function sanitizeHintString(raw: unknown): string | undefined {
-  if (typeof raw !== "string") return undefined;
-  const cleaned = raw
-    .replace(/[\u0000-\u001f\u007f]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!cleaned) return undefined;
-  return cleaned.length > MAX_HINT_LENGTH
-    ? cleaned.slice(0, MAX_HINT_LENGTH)
-    : cleaned;
-}
-
 /**
  * Strictly validates and bounds untrusted framework hints extracted from the
- * page's MAIN world. Never trusts arbitrary object prototypes or control chars.
+ * page's MAIN world. Never trusts arbitrary object prototypes, path traversal,
+ * or prompt injection strings.
  */
 export function sanitizeFrameworkHints(raw: unknown): FrameworkHints {
   let parsed: unknown = raw;
@@ -115,8 +106,8 @@ export function sanitizeFrameworkHints(raw: unknown): FrameworkHints {
   }
   if (!parsed || typeof parsed !== "object") return {};
   const obj = parsed as Record<string, unknown>;
-  const sourceHint = sanitizeHintString(obj.sourceHint);
-  const componentStack = sanitizeHintString(obj.componentStack);
+  const sourceHint = sanitizeSourceHint(obj.sourceHint);
+  const componentStack = sanitizeComponentStack(obj.componentStack);
   return {
     ...(sourceHint ? { sourceHint } : {}),
     ...(componentStack ? { componentStack } : {}),
