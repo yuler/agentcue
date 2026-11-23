@@ -1,9 +1,11 @@
 import {
   consumeSseResponse,
+  DEFAULT_BRIDGE_ORIGIN,
   DEFAULT_EXTENSION_SETTINGS,
   fetchBridgeState,
   isInjectableTabUrl,
   isValidCuePayload,
+  normalizeBridgeOrigin,
   normalizeSettings,
   sendCueToBridge,
   SSE_PORT_NAME,
@@ -656,9 +658,20 @@ export function initBackground(): void {
     }
 
     if (msg.type === "ext:check-bridge") {
+      if (!isExtensionPageSender(sender)) {
+        sendResponse({
+          ok: false,
+          reachable: false,
+          bridgeOrigin: DEFAULT_BRIDGE_ORIGIN,
+          error: "Unauthorized sender",
+        });
+        return false;
+      }
       void (async () => {
         const settings = await loadSettings();
-        const origin = msg.bridgeOrigin || settings.bridgeOrigin;
+        const origin = normalizeBridgeOrigin(
+          msg.bridgeOrigin || settings.bridgeOrigin
+        );
         const health = await fetchBridgeState(origin);
         sendResponse(health);
       })();
@@ -670,6 +683,14 @@ export function initBackground(): void {
 
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name === SSE_PORT_NAME) {
+      const sender = port.sender;
+      if (
+        !sender ||
+        (!isAuthorizedTabSender(sender) && !isExtensionPageSender(sender))
+      ) {
+        port.disconnect();
+        return;
+      }
       sseHub.attach(port);
     }
   });

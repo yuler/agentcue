@@ -53,7 +53,27 @@ describe("@agentcue/extension protocol & helpers", () => {
       normalizeBridgeOrigin("http://127.0.0.1:4318///"),
       "http://127.0.0.1:4318"
     );
+    assert.equal(
+      normalizeBridgeOrigin("https://[::1]:4318/"),
+      "https://[::1]:4318"
+    );
+    assert.equal(
+      normalizeBridgeOrigin("http://app.localhost:4318/"),
+      "http://app.localhost:4318"
+    );
     assert.equal(normalizeBridgeOrigin("chrome://extensions"), DEFAULT_BRIDGE_ORIGIN);
+    assert.equal(
+      normalizeBridgeOrigin("https://evil.example.com:4318"),
+      DEFAULT_BRIDGE_ORIGIN
+    );
+    assert.equal(
+      normalizeBridgeOrigin("http://192.168.1.50:4318"),
+      DEFAULT_BRIDGE_ORIGIN
+    );
+    assert.equal(
+      normalizeBridgeOrigin("evil.example.com:4318"),
+      DEFAULT_BRIDGE_ORIGIN
+    );
 
     const defaults = normalizeSettings(null);
     assert.equal(defaults.bridgeOrigin, DEFAULT_BRIDGE_ORIGIN);
@@ -68,6 +88,11 @@ describe("@agentcue/extension protocol & helpers", () => {
     assert.equal(custom.bridgeOrigin, "http://127.0.0.1:5000");
     assert.equal(custom.enabled, false);
     assert.equal(custom.showFloatingBar, false);
+
+    const remoteSettings = normalizeSettings({
+      bridgeOrigin: "https://remote.example.com:4318",
+    });
+    assert.equal(remoteSettings.bridgeOrigin, DEFAULT_BRIDGE_ORIGIN);
   });
 
   it("classifies localhost URLs and injectable tab URLs accurately", () => {
