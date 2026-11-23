@@ -562,11 +562,25 @@ export function mountOverlay(
       },
       onEvent: (event: ServerEvent) => {
         if (event.type === "state") {
-          serverState = event.state;
-          if (event.state.agents.length > 0) {
-            availableAgents = event.state.agents;
-            if (!stateStore.getSelectedAgent() && event.state.defaultAgent) {
-              selectedAgent = event.state.defaultAgent;
+          const validAgents = Array.isArray(event.state?.agents)
+            ? event.state.agents.filter((a): a is AgentId =>
+                SUPPORTED_AGENTS.includes(a as AgentId)
+              )
+            : [];
+          const validDefault =
+            event.state?.defaultAgent &&
+            SUPPORTED_AGENTS.includes(event.state.defaultAgent as AgentId)
+              ? event.state.defaultAgent
+              : null;
+          serverState = {
+            ...event.state,
+            agents: validAgents,
+            defaultAgent: validDefault,
+          };
+          if (validAgents.length > 0) {
+            availableAgents = validAgents;
+            if (!stateStore.getSelectedAgent() && validDefault && validAgents.includes(validDefault)) {
+              selectedAgent = validDefault;
             }
             renderAgentOptions();
           }
