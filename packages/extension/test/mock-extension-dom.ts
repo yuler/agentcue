@@ -29,18 +29,14 @@ export interface MockEvent {
   composedPath: () => unknown[];
 }
 
-export function makeEvent(
-  type: string,
-  opts: Partial<MockEvent> & { path?: unknown[] } = {}
-): MockEvent {
+export function makeEvent(type: string, opts: Partial<MockEvent> & { path?: unknown[] } = {}): MockEvent {
   const evt: MockEvent = {
     type, target: opts.target ?? null, bubbles: opts.bubbles ?? false, isTrusted: opts.isTrusted ?? false,
     detail: opts.detail, key: opts.key, code: opts.code,
     metaKey: opts.metaKey ?? false, ctrlKey: opts.ctrlKey ?? false, shiftKey: opts.shiftKey ?? false, altKey: opts.altKey ?? false,
     clientX: opts.clientX ?? 0, clientY: opts.clientY ?? 0, defaultPrevented: false,
     preventDefault() { evt.defaultPrevented = true; },
-    stopPropagation() {}, stopImmediatePropagation() {},
-    composedPath: () => opts.path ?? [evt.target],
+    stopPropagation() {}, stopImmediatePropagation() {}, composedPath: () => opts.path ?? [evt.target],
   };
   return evt;
 }
@@ -98,41 +94,30 @@ export class MockElement extends MockNode {
   constructor(tag: string, doc: MockDocument) {
     super(); this.tagName = tag.toUpperCase(); this.ownerDocument = doc;
   }
-  get outerHTML(): string {
-    const tag = this.tagName.toLowerCase();
-    return `<${tag}${this.id ? ` id="${this.id}"` : ""}>${this.textContent}</${tag}>`;
-  }
+  get outerHTML(): string { return `<${this.tagName.toLowerCase()}${this.id ? ` id="${this.id}"` : ""}>${this.textContent}</${this.tagName.toLowerCase()}>`; }
   set innerHTML(_val: string) {}
   get innerHTML() { return this.textContent; }
   attachShadow(init: { mode: "open" | "closed" }): MockShadowRoot {
     const root = new MockShadowRoot(this, init.mode);
-    this.internalShadow = root;
-    this.shadowRoot = init.mode === "open" ? root : null;
-    this.ownerDocument.lastCreatedShadow = root;
-    return root;
+    this.internalShadow = root; this.shadowRoot = init.mode === "open" ? root : null;
+    this.ownerDocument.lastCreatedShadow = root; return root;
   }
-  appendChild(child: MockElement): MockElement {
-    child.parentElement = this; this.children.push(child); return child;
-  }
+  appendChild(child: MockElement): MockElement { child.parentElement = this; this.children.push(child); return child; }
   remove() {
     if (!this.parentElement) return;
     this.parentElement.children = this.parentElement.children.filter((c) => c !== this);
     this.parentElement = null;
   }
-
   setAttribute(name: string, val: string) { this.attributes.set(name, val); }
   getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
   hasAttribute(name: string): boolean { return this.attributes.has(name); }
   querySelectorAll(): MockElement[] { return []; }
   cloneNode(): MockElement {
     const clone = new MockElement(this.tagName, this.ownerDocument);
-    clone.id = this.id;
-    clone.textContent = this.textContent;
+    clone.id = this.id; clone.textContent = this.textContent;
     return clone;
   }
-  getBoundingClientRect() {
-    return { left: 24, top: 48, right: 224, bottom: 96, width: 200, height: 48 };
-  }
+  getBoundingClientRect() { return { left: 24, top: 48, right: 224, bottom: 96, width: 200, height: 48 }; }
   focus() {}
   blur() {}
   dispatchEvent(evt: Event | MockEvent): boolean {
@@ -251,7 +236,8 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
 
   let activeContentPort: MockPort | null = null;
   const injectedFiles: Array<{ file: string; world?: string }> = [];
-  const postedCues: Array<{ url: string; payload: CuePayload }> = [];
+  const postedCues: Array<{ url: string; headers?: HeadersInit; payload: CuePayload }> = [];
+  const stateRequests: Array<{ url: string; headers?: HeadersInit }> = [];
   const iconUpdates: Array<{ tabId?: number; path: Record<string, string> }> = [];
   const badgeUpdates: Array<{ tabId?: number; text: string }> = [];
 
@@ -279,17 +265,11 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
         { name }: { name?: string } = {},
         senderOverride?: { id?: string; tab?: { id?: number; url?: string } } | null
       ) => {
-        const sender =
-          senderOverride === null
-            ? undefined
-            : (senderOverride ?? { id: "agentcue-test-ext-id", tab: { id: 1, url: options.tabUrl } });
+        const sender = senderOverride === null ? undefined : (senderOverride ?? { id: "agentcue-test-ext-id", tab: { id: 1, url: options.tabUrl } });
         const clientPort: MockPort = {
           name: name || "", sender, disconnected: false, msgListeners: [], disconnectListeners: [],
           postMessage: () => {},
-          disconnect: () => {
-            clientPort.disconnected = serverPort.disconnected = true;
-            for (const fn of serverPort.disconnectListeners) fn();
-          },
+          disconnect: () => { clientPort.disconnected = serverPort.disconnected = true; for (const fn of serverPort.disconnectListeners) fn(); },
           onMessage: { addListener: (fn) => clientPort.msgListeners.push(fn) },
           onDisconnect: { addListener: (fn) => clientPort.disconnectListeners.push(fn) },
         };
@@ -298,8 +278,7 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
           postMessage: (msg) => { for (const fn of clientPort.msgListeners) fn(msg); },
           disconnect: () => {
             serverPort.disconnected = clientPort.disconnected = true;
-            for (const fn of serverPort.disconnectListeners) fn();
-            for (const fn of clientPort.disconnectListeners) fn();
+            for (const fn of [...serverPort.disconnectListeners, ...clientPort.disconnectListeners]) fn();
           },
           onMessage: { addListener: (fn) => serverPort.msgListeners.push(fn) },
           onDisconnect: { addListener: (fn) => serverPort.disconnectListeners.push(fn) },
@@ -308,10 +287,7 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
         for (const fn of portConnectListeners) fn(serverPort);
         return clientPort;
       },
-      sendMessage: (
-        msg: unknown,
-        senderOverride?: { id?: string; tab?: { id?: number; url?: string } }
-      ) =>
+      sendMessage: (msg: unknown, senderOverride?: { id?: string; tab?: { id?: number; url?: string } }) =>
         new Promise((resolve) => {
           const sender = senderOverride ?? { id: "agentcue-test-ext-id", tab: { id: 1, url: options.tabUrl } };
           let responded = false, isAsync = false;
@@ -328,9 +304,7 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
       sendMessage: (_tabId: number, msg: unknown) =>
         new Promise((resolve, reject) => {
           if (contentRuntimeListeners.length === 0) return reject(new Error("Receiving end does not exist"));
-          for (const listener of contentRuntimeListeners) {
-            listener(msg, { id: "agentcue-test-ext-id" }, (res) => resolve(res));
-          }
+          for (const listener of contentRuntimeListeners) listener(msg, { id: "agentcue-test-ext-id" }, (res) => resolve(res));
         }),
       onUpdated: { addListener: (fn: (tabId: number, changeInfo: { status?: string }) => void) => { tabUpdatedListeners.push(fn); } },
       onRemoved: { addListener: () => {} },
@@ -345,9 +319,7 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
       setBadgeBackgroundColor: async () => {},
     },
     scripting: {
-      executeScript: async (inj: {
-        files?: string[]; func?: (...args: unknown[]) => unknown; args?: unknown[]; world?: string;
-      }) => {
+      executeScript: async (inj: { files?: string[]; func?: (...args: unknown[]) => unknown; args?: unknown[]; world?: string }) => {
         if (typeof inj.func === "function") return [{ result: inj.func(...(inj.args || [])) }];
         for (const file of inj.files || []) {
           injectedFiles.push({ file, world: inj.world });
@@ -360,19 +332,12 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
     storage: {
       local: {
         get: async (key?: string | string[] | null) => {
-          if (Array.isArray(key)) {
-            const out: Record<string, unknown> = {};
-            for (const k of key) out[k] = storageData[k];
-            return out;
-          }
+          if (Array.isArray(key)) { const out: Record<string, unknown> = {}; for (const k of key) out[k] = storageData[k]; return out; }
           return key ? { [key]: storageData[key] } : { ...storageData };
         },
         set: async (items: Record<string, unknown>) => {
           const changes: Record<string, { oldValue?: unknown; newValue?: unknown }> = {};
-          for (const [k, v] of Object.entries(items)) {
-            changes[k] = { oldValue: storageData[k], newValue: v };
-            storageData[k] = v;
-          }
+          for (const [k, v] of Object.entries(items)) { changes[k] = { oldValue: storageData[k], newValue: v }; storageData[k] = v; }
           for (const fn of [...storageListeners]) fn(changes, "local");
         },
       },
@@ -390,9 +355,7 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
       type: string; bubbles: boolean; isTrusted = false; defaultPrevented = false; target: unknown = null;
       constructor(type: string, init?: { bubbles?: boolean }) { this.type = type; this.bubbles = Boolean(init?.bubbles); }
       preventDefault() { this.defaultPrevented = true; }
-      stopPropagation() {}
-      stopImmediatePropagation() {}
-      composedPath() { return [this.target]; }
+      stopPropagation() {} stopImmediatePropagation() {} composedPath() { return [this.target]; }
     },
     CustomEvent: class MockCustomEventCtor {
       type: string; bubbles: boolean; detail: unknown; isTrusted = false; defaultPrevented = false; target: unknown = null;
@@ -400,26 +363,25 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
         this.type = type; this.bubbles = Boolean(init?.bubbles); this.detail = init?.detail;
       }
       preventDefault() { this.defaultPrevented = true; }
-      stopPropagation() {}
-      stopImmediatePropagation() {}
-      composedPath() { return [this.target]; }
+      stopPropagation() {} stopImmediatePropagation() {} composedPath() { return [this.target]; }
     },
     fetch: async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/cue")) {
-        postedCues.push({ url, payload: JSON.parse(String(init?.body || "{}")) as CuePayload });
-        return new Response(JSON.stringify({ cueId: "cue-test-1", queuePosition: 1 }), {
-          status: 200, headers: { "Content-Type": "application/json" },
-        });
+        postedCues.push({ url, headers: init?.headers, payload: JSON.parse(String(init?.body || "{}")) as CuePayload });
+        return new Response(JSON.stringify({ cueId: "cue-test-1", queuePosition: 1 }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.endsWith("/api/state")) {
+        stateRequests.push({ url, headers: init?.headers });
+        return new Response(
+          JSON.stringify({ cwd: "/tmp/mock-workspace", agents: ["agy"], defaultAgent: "agy", status: "idle", activeCue: null, queuedCount: 0, lastResult: null }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
       }
       if (url.endsWith("/api/events")) {
         if (!bridgeOnline) return new Response("Offline", { status: 503 });
         return new Response(
-          new ReadableStream({
-            start(controller) {
-              init?.signal?.addEventListener("abort", () => { try { controller.close(); } catch {} });
-            },
-          }),
+          new ReadableStream({ start(c) { init?.signal?.addEventListener("abort", () => { try { c.close(); } catch {} }); } }),
           { status: 200, headers: { "Content-Type": "text/event-stream" } }
         );
       }
@@ -431,45 +393,23 @@ export async function createExtensionHarness(options: { tabUrl: string; bridgeOn
   initBackground();
 
   return {
-    win, doc, targetButton, mockChrome, postedCues, injectedFiles, iconUpdates, badgeUpdates,
+    win, doc, targetButton, mockChrome, postedCues, stateRequests, injectedFiles, iconUpdates, badgeUpdates,
     setBridgeOnline: (next: boolean) => { bridgeOnline = next; },
     getActivePort: () => activeContentPort,
-    triggerContentLoad: async () => {
-      registeringTarget = "content";
-      initContentBridge();
-      await new Promise((r) => setTimeout(r, 15));
-    },
+    triggerContentLoad: async () => { registeringTarget = "content"; initContentBridge(); await new Promise((r) => setTimeout(r, 15)); },
     toggleViaPopup: async () => {
-      const res = await mockChrome.runtime.sendMessage(
-        { type: "ext:toggle-tab", tabId: 1, tabUrl: options.tabUrl },
-        { id: "agentcue-test-ext-id" }
-      );
+      const res = await mockChrome.runtime.sendMessage({ type: "ext:toggle-tab", tabId: 1, tabUrl: options.tabUrl }, { id: "agentcue-test-ext-id" });
       await new Promise((r) => setTimeout(r, 15));
       return res;
     },
-    queryTabStateFromPopup: async () =>
-      mockChrome.runtime.sendMessage(
-        { type: "ext:tab-state", tabId: 1, tabUrl: options.tabUrl },
-        { id: "agentcue-test-ext-id" }
-      ),
+    queryTabStateFromPopup: async () => mockChrome.runtime.sendMessage({ type: "ext:tab-state", tabId: 1, tabUrl: options.tabUrl }, { id: "agentcue-test-ext-id" }),
     updateSettingsFromPopup: async (patch: { enabled?: boolean; showFloatingBar?: boolean }) => {
-      const res = await mockChrome.runtime.sendMessage(
-        { type: "ext:update-settings", ...patch, tabId: 1, tabUrl: options.tabUrl },
-        { id: "agentcue-test-ext-id" }
-      );
+      const res = await mockChrome.runtime.sendMessage({ type: "ext:update-settings", ...patch, tabId: 1, tabUrl: options.tabUrl }, { id: "agentcue-test-ext-id" });
       await new Promise((r) => setTimeout(r, 15));
       return res;
     },
-    triggerCommand: async (command = "toggle-pick") => {
-      for (const fn of commandListeners) fn(command, { id: 1, url: options.tabUrl });
-      await new Promise((r) => setTimeout(r, 15));
-    },
-    triggerTabReload: () => {
-      for (const fn of tabUpdatedListeners) fn(1, { status: "loading" });
-    },
-    cleanup: () => {
-      activeContentPort?.disconnect();
-      Object.assign(globalThis, prevGlobals);
-    },
+    triggerCommand: async (command = "toggle-pick") => { for (const fn of commandListeners) fn(command, { id: 1, url: options.tabUrl }); await new Promise((r) => setTimeout(r, 15)); },
+    triggerTabReload: () => { for (const fn of tabUpdatedListeners) fn(1, { status: "loading" }); },
+    cleanup: () => { activeContentPort?.disconnect(); Object.assign(globalThis, prevGlobals); },
   };
 }

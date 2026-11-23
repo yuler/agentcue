@@ -7,6 +7,7 @@ import { startServer } from "../../agentcue/src/server/server.ts";
 import type { AgentInvocation } from "../../agentcue/src/server/dispatcher.ts";
 import type { CuePayload, ServerEvent } from "../../agentcue/src/shared/types.ts";
 import {
+  buildBridgeAuthHeaders,
   consumeSseResponse,
   DEFAULT_BRIDGE_ORIGIN,
   fetchBridgeState,
@@ -14,6 +15,7 @@ import {
   isLocalhostUrl,
   isValidCuePayload,
   normalizeBridgeOrigin,
+  normalizeBridgeToken,
   normalizeSettings,
   sanitizeFrameworkHints,
   sendCueToBridge,
@@ -77,17 +79,27 @@ describe("@agentcue/extension protocol & helpers", () => {
 
     const defaults = normalizeSettings(null);
     assert.equal(defaults.bridgeOrigin, DEFAULT_BRIDGE_ORIGIN);
+    assert.equal(defaults.bridgeToken, "");
     assert.equal(defaults.enabled, true);
     assert.equal(defaults.showFloatingBar, true);
 
     const custom = normalizeSettings({
       bridgeOrigin: "127.0.0.1:5000",
+      bridgeToken: "  my-secret-token \n\r ",
       enabled: false,
       showFloatingBar: false,
     });
     assert.equal(custom.bridgeOrigin, "http://127.0.0.1:5000");
+    assert.equal(custom.bridgeToken, "my-secret-token");
     assert.equal(custom.enabled, false);
     assert.equal(custom.showFloatingBar, false);
+
+    assert.equal(normalizeBridgeToken("  tok-123\u0000\n "), "tok-123");
+    assert.deepEqual(buildBridgeAuthHeaders(""), {});
+    assert.deepEqual(buildBridgeAuthHeaders("tok-123"), {
+      Authorization: "Bearer tok-123",
+      "X-Agentcue-Token": "tok-123",
+    });
 
     const remoteSettings = normalizeSettings({
       bridgeOrigin: "https://remote.example.com:4318",
@@ -154,6 +166,72 @@ describe("@agentcue/extension protocol & helpers", () => {
       assert.equal(executed[0].agent, "agy");
       assert.match(executed[0].prompt, /PricingCard\.tsx:18/);
       assert.ok(receivedEvents.some((e) => e.type === "state"));
+      assert.ok(receivedEvents.some((e) => e.type === "cue:done"));
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("authenticates health checks, Cue dispatches, and SSE streams against a token-protected agentcue server", async () => {
+    const executed: AgentInvocation[] = [];
+    const bridgeToken = "ext-bridge-token-9876543210";
+    const server = await startServer({
+      port: 0,
+      cwd: "/tmp/ext-auth-workspace",
+      agents: ["agy"],
+      defaultAgent: "agy",
+      token: bridgeToken,
+      executor: async (inv) => {
+        executed.push(inv);
+        return { ok: true, exitCode: 0 };
+      },
+    });
+
+    try {
+      // Without token -> fails closed with 401
+      const unauthHealth = await fetchBridgeState(server.origin);
+      assert.equal(unauthHealth.ok, false);
+      assert.equal(unauthHealth.error, "HTTP 401");
+
+      const unauthCue = await sendCueToBridge(server.origin, sampleCue);
+      assert.equal(unauthCue.ok, false);
+      assert.equal(unauthCue.status, 401);
+
+      // With token -> authenticates state, SSE, and Cue dispatch
+      const authHealth = await fetchBridgeState(server.origin, bridgeToken);
+      assert.equal(authHealth.ok, true);
+      assert.equal(authHealth.state?.cwd, "/tmp/ext-auth-workspace");
+
+      const receivedEvents: ServerEvent[] = [];
+      const sseAbort = new AbortController();
+      const sseRes = await fetch(`${server.origin}/api/events`, {
+        headers: {
+          Accept: "text/event-stream",
+          ...buildBridgeAuthHeaders(bridgeToken),
+        },
+        signal: sseAbort.signal,
+      });
+      assert.equal(sseRes.status, 200);
+      assert.ok(sseRes.body);
+
+      const streamPromise = consumeSseResponse(sseRes.body, (evt) => {
+        receivedEvents.push(evt);
+        if (evt.type === "cue:done") {
+          sseAbort.abort();
+        }
+      }).catch(() => {});
+
+      const authCue = await sendCueToBridge(
+        server.origin,
+        sampleCue,
+        bridgeToken
+      );
+      assert.equal(authCue.ok, true);
+      assert.equal(authCue.status, 202);
+      assert.ok(authCue.cueId);
+
+      await streamPromise;
+      assert.equal(executed.length, 1);
       assert.ok(receivedEvents.some((e) => e.type === "cue:done"));
     } finally {
       await server.close();

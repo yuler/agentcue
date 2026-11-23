@@ -3,6 +3,7 @@ import { mountOverlay } from "./overlay.ts";
 declare global {
   interface Window {
     __AGENTCUE_ORIGIN__?: string;
+    __AGENTCUE_TOKEN__?: string;
     __AGENTCUE_INSTANCE__?: {
       togglePickMode: () => void;
       setActive?: (next: boolean) => void;
@@ -31,6 +32,53 @@ function resolveOrigin(): string {
   return "http://localhost:4318";
 }
 
+function resolveToken(): string | undefined {
+  if (typeof window !== "undefined" && window.__AGENTCUE_TOKEN__) {
+    const trimmed = window.__AGENTCUE_TOKEN__.trim();
+    if (trimmed) return trimmed;
+  }
+  const current = document.currentScript as HTMLScriptElement | null;
+  const dataToken = current?.getAttribute("data-token")?.trim();
+  if (dataToken) return dataToken;
+  if (current?.src) {
+    try {
+      const u = new URL(
+        current.src,
+        typeof window !== "undefined" ? window.location.href : "http://localhost:4318"
+      );
+      const queryToken = u.searchParams.get("token")?.trim();
+      if (queryToken) return queryToken;
+    } catch {
+      // fall through
+    }
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const pageUrl = new URL(window.location.href);
+      const paramToken = pageUrl.searchParams.get("agentcue_token")?.trim();
+      if (paramToken) {
+        try {
+          sessionStorage.setItem("agentcue:bridge-token", paramToken);
+        } catch {
+          // ignore storage errors
+        }
+        return paramToken;
+      }
+    } catch {
+      // ignore URL errors
+    }
+    try {
+      const stored =
+        sessionStorage.getItem("agentcue:bridge-token")?.trim() ||
+        localStorage.getItem("agentcue:bridge-token")?.trim();
+      if (stored) return stored;
+    } catch {
+      // ignore storage errors
+    }
+  }
+  return undefined;
+}
+
 function init() {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   if (window.__AGENTCUE_INSTANCE__) {
@@ -38,6 +86,10 @@ function init() {
     return;
   }
   const origin = resolveOrigin();
+  const token = resolveToken();
+  if (token && !window.__AGENTCUE_TOKEN__) {
+    window.__AGENTCUE_TOKEN__ = token;
+  }
   const mount = () => {
     if (!window.__AGENTCUE_INSTANCE__) {
       window.__AGENTCUE_INSTANCE__ = mountOverlay(origin);

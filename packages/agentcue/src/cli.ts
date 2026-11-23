@@ -8,6 +8,8 @@ interface CliArgs {
   host: string;
   cwd: string;
   defaultAgent?: AgentId;
+  token?: string;
+  unsafeSkipPermissions: boolean;
   help: boolean;
   version: boolean;
 }
@@ -17,6 +19,8 @@ function parseCliArgs(argv: string[]): CliArgs {
   let host = "127.0.0.1";
   let cwd = process.cwd();
   let defaultAgent: AgentId | undefined;
+  let token = process.env.AGENTCUE_TOKEN?.trim() || undefined;
+  let unsafeSkipPermissions = false;
   let help = false;
   let version = false;
 
@@ -37,6 +41,12 @@ function parseCliArgs(argv: string[]): CliArgs {
     } else if (arg === "-a" || arg === "--agent") {
       const candidate = argv[++i] as AgentId;
       if (SUPPORTED_AGENTS.includes(candidate)) defaultAgent = candidate;
+    } else if (arg === "--token") {
+      token = argv[++i]?.trim() || undefined;
+    } else if (arg.startsWith("--token=")) {
+      token = arg.slice("--token=".length).trim() || undefined;
+    } else if (arg === "--unsafe-skip-permissions") {
+      unsafeSkipPermissions = true;
     } else if (!arg.startsWith("-")) {
       const normalized = arg === "cursor" ? "cursor-agent" : arg;
       if (SUPPORTED_AGENTS.includes(normalized as AgentId)) {
@@ -45,7 +55,16 @@ function parseCliArgs(argv: string[]): CliArgs {
     }
   }
 
-  return { port, host, cwd, defaultAgent, help, version };
+  return {
+    port,
+    host,
+    cwd,
+    defaultAgent,
+    token,
+    unsafeSkipPermissions,
+    help,
+    version,
+  };
 }
 
 function printHelp() {
@@ -59,12 +78,14 @@ Agents:
   agy | claude | cursor-agent | codex | pi
 
 Options:
-  -p, --port <port>    Local bridge port (default: 4318)
-  -a, --agent <agent>  Default selected Agent Target
-  -C, --cwd <dir>      Target workspace directory (default: current directory)
-  --host <host>        Bind host (default: 127.0.0.1)
-  -v, --version        Show version number
-  -h, --help           Show this help message
+  -p, --port <port>            Local bridge port (default: 4318)
+  -a, --agent <agent>          Default selected Agent Target
+  -C, --cwd <dir>              Target workspace directory (default: current directory)
+  --host <host>                Bind host (default: 127.0.0.1)
+  --token <token>              Require authentication token for bridge API requests
+  --unsafe-skip-permissions    Opt in to agent CLI permission/sandbox bypass flags
+  -v, --version                Show version number
+  -h, --help                   Show this help message
 `);
 }
 
@@ -88,6 +109,8 @@ async function main() {
         host: args.host,
         cwd: args.cwd,
         defaultAgent: args.defaultAgent,
+        token: args.token,
+        unsafeSkipPermissions: args.unsafeSkipPermissions,
       });
       break;
     } catch (err) {
@@ -117,13 +140,20 @@ async function main() {
       `  \x1b[36m➜\x1b[0m  \x1b[1mCLI       \x1b[0m \x1b[36m${running.origin}\x1b[0m  ·  ${agentList}`
     );
   } else {
-    const scriptTag = `<script src="${running.origin}/client.js"></script>`;
-    const bookmarklet = `javascript:(()=>{const s=document.createElement('script');s.src='${running.origin}/client.js?t='+Date.now();document.head.appendChild(s);})()`;
+    const tokenAttr = args.token
+      ? ` data-token=${JSON.stringify(args.token)}`
+      : "";
+    const scriptTag = `<script src="${running.origin}/client.js"${tokenAttr}></script>`;
+    const bookmarkletInit = args.token
+      ? `window.__AGENTCUE_TOKEN__=${JSON.stringify(args.token)};`
+      : "";
+    const bookmarklet = `javascript:(()=>{${bookmarkletInit}const s=document.createElement('script');s.src='${running.origin}/client.js?t='+Date.now();document.head.appendChild(s);})()`;
+    const tokenLine = args.token ? `\n  Token     : ${args.token}` : "";
 
     console.log(`
 \x1b[1m\x1b[36m✦ agentcue\x1b[0m \x1b[90mv${getAgentcueVersion()}\x1b[0m bridge listening on \x1b[1m${running.origin}\x1b[0m
   Workspace : ${state.cwd}
-  Agents    : ${agentList}
+  Agents    : ${agentList}${tokenLine}
 
 \x1b[1m1) Add to any local dev app (HTML / Vite / Next / Vue / Svelte):\x1b[0m
    ${scriptTag}

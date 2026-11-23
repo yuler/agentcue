@@ -315,7 +315,15 @@ describe("@agentcue/extension P1 security boundary & UX lifecycle", () => {
       assert.match(sendBtn.getAttribute("data-tip") || "", /Offline/i);
       assert.equal(h.postedCues.length, 0);
 
-      // Connect SSE and send again -> inline green check on sendBtn + Cue dispatched with hints
+      // Connect SSE and send again -> inline green check on sendBtn + Cue dispatched with hints and stored bridgeToken
+      await h.mockChrome.storage.local.set({
+        "agentcue:extension-settings": {
+          bridgeOrigin: "http://localhost:4318",
+          bridgeToken: "stored-ext-token",
+          enabled: true,
+          showFloatingBar: true,
+        },
+      });
       h.getActivePort()?.postMessage({
         type: "sse:open",
         bridgeOrigin: "http://localhost:4318",
@@ -327,6 +335,11 @@ describe("@agentcue/extension P1 security boundary & UX lifecycle", () => {
       assert.equal(sendBtn.classList.contains("sent"), true);
       assert.equal(h.postedCues.length, 1);
       assert.equal(h.postedCues[0].url, "http://localhost:4318/api/cue");
+      assert.deepEqual(h.postedCues[0].headers, {
+        "Content-Type": "application/json",
+        Authorization: "Bearer stored-ext-token",
+        "X-Agentcue-Token": "stored-ext-token",
+      });
       assert.equal(
         h.postedCues[0].payload.pins[0].note,
         "Make the Upgrade CTA pill rounded-full"
@@ -465,12 +478,22 @@ describe("@agentcue/extension P1 security boundary & UX lifecycle", () => {
       assert.equal(foreignExtCheckBridge.reachable, false);
       assert.match(foreignExtCheckBridge.error || "", /Unauthorized/i);
 
-      // Authorized extension page sender (no sender.tab) normalizes non-loopback bridgeOrigin
+      // Authorized extension page sender (no sender.tab) normalizes non-loopback bridgeOrigin and forwards bridgeToken
       const popupCheckBridge = (await h.mockChrome.runtime.sendMessage(
-        { type: "ext:check-bridge", bridgeOrigin: "https://evil.example.com:4318" },
+        {
+          type: "ext:check-bridge",
+          bridgeOrigin: "https://evil.example.com:4318",
+          bridgeToken: "popup-secret-token",
+        },
         { id: "agentcue-test-ext-id" }
       )) as { ok: boolean; bridgeOrigin: string };
       assert.equal(popupCheckBridge.bridgeOrigin, "http://localhost:4318");
+      assert.equal(h.stateRequests.length, 1);
+      assert.deepEqual(h.stateRequests[0].headers, {
+        Accept: "application/json",
+        Authorization: "Bearer popup-secret-token",
+        "X-Agentcue-Token": "popup-secret-token",
+      });
 
       // chrome.runtime.onConnect must disconnect unauthorized SSE port senders immediately
       const foreignPort = h.mockChrome.runtime.connect(

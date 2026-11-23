@@ -40,17 +40,65 @@ export interface OverlayInstance {
   destroy: () => void;
 }
 
+export const STORAGE_TOKEN_KEY = "agentcue:bridge-token";
+
+function readBrowserStoredToken(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const url = new URL(window.location.href);
+    const paramToken = url.searchParams.get("agentcue_token")?.trim();
+    if (paramToken) {
+      try {
+        sessionStorage.setItem(STORAGE_TOKEN_KEY, paramToken);
+      } catch {
+        // ignore storage errors
+      }
+      return paramToken;
+    }
+  } catch {
+    // ignore URL errors
+  }
+  try {
+    const stored =
+      sessionStorage.getItem(STORAGE_TOKEN_KEY)?.trim() ||
+      localStorage.getItem(STORAGE_TOKEN_KEY)?.trim();
+    if (stored) return stored;
+  } catch {
+    // ignore storage errors
+  }
+  return undefined;
+}
+
 export function createHttpBridgeTransport(
-  getOrigin: string | (() => string)
+  getOrigin: string | (() => string),
+  getToken?: string | (() => string | undefined)
 ): BridgeTransport {
   const resolveOrigin = () =>
     (typeof getOrigin === "function" ? getOrigin() : getOrigin).replace(/\/+$/, "");
+  const resolveToken = () => {
+    if (typeof getToken === "function") return getToken();
+    if (typeof getToken === "string") return getToken;
+    if (typeof window !== "undefined") {
+      const globalToken = (window as Window & { __AGENTCUE_TOKEN__?: string })
+        .__AGENTCUE_TOKEN__?.trim();
+      if (globalToken) return globalToken;
+      return readBrowserStoredToken();
+    }
+    return undefined;
+  };
 
   return {
     async sendCue(payload: CuePayload): Promise<CueDispatchResult> {
+      const token = resolveToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["X-Agentcue-Token"] = token;
+      }
       const res = await fetch(`${resolveOrigin()}/api/cue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -67,7 +115,11 @@ export function createHttpBridgeTransport(
       };
     },
     subscribeEvents(handlers: BridgeTransportHandlers): () => void {
-      const es = new EventSource(`${resolveOrigin()}/api/events`);
+      const token = resolveToken();
+      const eventsUrl = token
+        ? `${resolveOrigin()}/api/events?token=${encodeURIComponent(token)}`
+        : `${resolveOrigin()}/api/events`;
+      const es = new EventSource(eventsUrl);
       es.onopen = () => handlers.onOpen();
       es.onmessage = (msg) => {
         try {

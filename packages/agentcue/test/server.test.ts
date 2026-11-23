@@ -1,6 +1,11 @@
+// Bridge CORS, Host, and token authentication tests live in ./server-security.test.ts
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { connect } from "node:net";
 import {
   buildAgentCommand,
@@ -50,48 +55,67 @@ const sampleCue = (
 });
 
 describe("buildAgentCommand across all 5 Agent Targets", () => {
-  it("builds non-interactive auto-approve commands in fresh mode", () => {
+  it("omits permission and sandbox bypass flags by default in fresh mode", () => {
     assert.deepEqual(buildAgentCommand("agy", "PROMPT", false), {
       bin: "agy",
-      args: ["--dangerously-skip-permissions", "-p", "PROMPT"],
+      args: ["-p", "PROMPT"],
     });
     assert.deepEqual(buildAgentCommand("claude", "PROMPT", false), {
       bin: "claude",
-      args: ["--dangerously-skip-permissions", "-p", "PROMPT"],
+      args: ["-p", "PROMPT"],
     });
     assert.deepEqual(buildAgentCommand("cursor-agent", "PROMPT", false), {
       bin: "cursor-agent",
-      args: ["--yolo", "-p", "PROMPT"],
+      args: ["-p", "PROMPT"],
     });
     assert.deepEqual(buildAgentCommand("codex", "PROMPT", false), {
       bin: "codex",
-      args: [
-        "exec",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--skip-git-repo-check",
-        "PROMPT",
-      ],
+      args: ["exec", "--skip-git-repo-check", "PROMPT"],
     });
     assert.deepEqual(buildAgentCommand("pi", "PROMPT", false), {
       bin: "pi",
-      args: ["--approve", "-p", "--", "PROMPT"],
+      args: ["-p", "--", "PROMPT"],
     });
   });
 
-  it("adds session continuation flags when continueSession is enabled", () => {
+  it("adds session continuation flags without unsafe bypass flags by default", () => {
     assert.deepEqual(buildAgentCommand("agy", "NEXT", true), {
       bin: "agy",
-      args: ["--dangerously-skip-permissions", "--continue", "-p", "NEXT"],
+      args: ["--continue", "-p", "NEXT"],
     });
     assert.deepEqual(buildAgentCommand("claude", "NEXT", true), {
       bin: "claude",
-      args: ["--dangerously-skip-permissions", "--continue", "-p", "NEXT"],
+      args: ["--continue", "-p", "NEXT"],
     });
     assert.deepEqual(buildAgentCommand("cursor-agent", "NEXT", true), {
       bin: "cursor-agent",
-      args: ["--yolo", "--continue", "-p", "NEXT"],
+      args: ["--continue", "-p", "NEXT"],
     });
     assert.deepEqual(buildAgentCommand("codex", "NEXT", true), {
+      bin: "codex",
+      args: ["exec", "resume", "--skip-git-repo-check", "--last", "NEXT"],
+    });
+    assert.deepEqual(buildAgentCommand("pi", "NEXT", true), {
+      bin: "pi",
+      args: ["--continue", "-p", "--", "NEXT"],
+    });
+  });
+
+  it("includes permission bypass flags only when unsafeSkipPermissions is explicitly enabled", () => {
+    const unsafe = { unsafeSkipPermissions: true };
+    assert.deepEqual(buildAgentCommand("agy", "PROMPT", false, unsafe), {
+      bin: "agy",
+      args: ["--dangerously-skip-permissions", "-p", "PROMPT"],
+    });
+    assert.deepEqual(buildAgentCommand("claude", "NEXT", true, unsafe), {
+      bin: "claude",
+      args: ["--dangerously-skip-permissions", "--continue", "-p", "NEXT"],
+    });
+    assert.deepEqual(buildAgentCommand("cursor-agent", "PROMPT", false, unsafe), {
+      bin: "cursor-agent",
+      args: ["--yolo", "-p", "PROMPT"],
+    });
+    assert.deepEqual(buildAgentCommand("codex", "NEXT", true, unsafe), {
       bin: "codex",
       args: [
         "exec",
@@ -102,9 +126,9 @@ describe("buildAgentCommand across all 5 Agent Targets", () => {
         "NEXT",
       ],
     });
-    assert.deepEqual(buildAgentCommand("pi", "NEXT", true), {
+    assert.deepEqual(buildAgentCommand("pi", "PROMPT", false, unsafe), {
       bin: "pi",
-      args: ["--approve", "--continue", "-p", "--", "NEXT"],
+      args: ["--approve", "-p", "--", "PROMPT"],
     });
   });
 });

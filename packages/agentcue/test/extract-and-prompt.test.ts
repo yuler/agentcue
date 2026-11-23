@@ -8,8 +8,12 @@ import {
 import { detectFrameworkHints } from "../src/client/extract.ts";
 import { renderAgentMenuDom } from "../src/client/dom.ts";
 import { mountOverlay } from "../src/client/overlay.ts";
-import type { AgentId, ServerEvent } from "../src/shared/types.ts";
-import type { BridgeTransportHandlers } from "../src/client/transport.ts";
+import { startServer } from "../src/server/server.ts";
+import type { AgentId, CuePayload, ServerEvent } from "../src/shared/types.ts";
+import {
+  createHttpBridgeTransport,
+  type BridgeTransportHandlers,
+} from "../src/client/transport.ts";
 
 describe("formatCuePrompt", () => {
   it("formats multiple Pins into a clean structured Markdown prompt with untrusted data boundaries", () => {
@@ -524,6 +528,53 @@ describe("renderAgentMenuDom & SSE state agent validation (#16)", () => {
       overlay.destroy();
       globalThis.document = prevDoc;
       globalThis.window = prevWin;
+    }
+  });
+
+  it("createHttpBridgeTransport authenticates sendCue against a token-protected bridge", async () => {
+    const token = "client-transport-token-456";
+    const server = await startServer({
+      port: 0,
+      agents: ["agy"],
+      token,
+      executor: async () => ({ ok: true, exitCode: 0 }),
+    });
+
+    const samplePayload: CuePayload = {
+      agent: "agy",
+      continueSession: false,
+      pageUrl: "http://localhost:3000",
+      pageTitle: "App",
+      pins: [
+        {
+          index: 1,
+          note: "Fix margin",
+          context: {
+            tagName: "div",
+            selector: "#app",
+            breadcrumb: "body > div#app",
+            outerHTML: '<div id="app">Hi</div>',
+            textExcerpt: "Hi",
+            computedStyles: {},
+            boundingBox: { x: 0, y: 0, width: 100, height: 40 },
+          },
+        },
+      ],
+    };
+
+    try {
+      const unauthTransport = createHttpBridgeTransport(server.origin);
+      const unauthRes = await unauthTransport.sendCue(samplePayload);
+      assert.equal(unauthRes.ok, false);
+      assert.equal(unauthRes.status, 401);
+
+      const authTransport = createHttpBridgeTransport(server.origin, token);
+      const authRes = await authTransport.sendCue(samplePayload);
+      assert.equal(authRes.ok, true);
+      assert.equal(authRes.status, 202);
+      assert.ok(authRes.cueId);
+    } finally {
+      await server.close();
     }
   });
 });

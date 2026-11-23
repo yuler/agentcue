@@ -41,7 +41,11 @@ function installDeferredHubMocks() {
   const settings = { ...DEFAULT_EXTENSION_SETTINGS };
   const pendingGets: Array<() => void> = [];
   const storageListeners = new Set<StorageListener>();
-  const upstreams: Array<{ url: string; signal: AbortSignal }> = [];
+  const upstreams: Array<{
+    url: string;
+    headers?: HeadersInit;
+    signal: AbortSignal;
+  }> = [];
 
   const prevChrome = (globalThis as Record<string, unknown>).chrome;
   const prevFetch = globalThis.fetch;
@@ -76,7 +80,7 @@ function installDeferredHubMocks() {
     if (!signal) {
       throw new Error("Expected upstream fetch to provide an AbortSignal");
     }
-    upstreams.push({ url: String(input), signal });
+    upstreams.push({ url: String(input), headers: init?.headers, signal });
     return new Response(
       new ReadableStream({
         start(controller) {
@@ -108,6 +112,21 @@ function installDeferredHubMocks() {
     changeBridgeOrigin: (bridgeOrigin: string) => {
       const oldValue = { ...settings };
       settings.bridgeOrigin = bridgeOrigin;
+      for (const fn of [...storageListeners]) {
+        fn(
+          {
+            [STORAGE_SETTINGS_KEY]: {
+              oldValue,
+              newValue: { ...settings },
+            },
+          },
+          "local"
+        );
+      }
+    },
+    changeBridgeToken: (bridgeToken: string) => {
+      const oldValue = { ...settings };
+      settings.bridgeToken = bridgeToken;
       for (const fn of [...storageListeners]) {
         fn(
           {
@@ -182,6 +201,39 @@ describe("@agentcue/extension shared SSE hub lifecycle", () => {
       assert.equal(mocks.upstreams.length, 1);
       assert.equal(live.length, 1);
       assert.equal(live[0].url, "http://127.0.0.1:5000/api/events");
+
+      port.disconnect();
+      await flush();
+      assert.equal(mocks.liveUpstreams().length, 0);
+    } finally {
+      mocks.restore();
+    }
+  });
+
+  it("reconnects upstream with auth headers when bridgeToken changes in extension settings", async () => {
+    const mocks = installDeferredHubMocks();
+
+    try {
+      const hub = createSharedSseHub();
+      const port = createMockPort();
+      hub.attach(port as unknown as chrome.runtime.Port);
+      await mocks.resolvePendingGets();
+
+      assert.equal(mocks.upstreams.length, 1);
+      assert.equal(mocks.liveUpstreams().length, 1);
+
+      mocks.changeBridgeToken("sse-token-xyz");
+      await mocks.resolvePendingGets();
+
+      assert.equal(mocks.upstreams.length, 2);
+      assert.equal(mocks.upstreams[0].signal.aborted, true);
+      const live = mocks.liveUpstreams();
+      assert.equal(live.length, 1);
+      assert.deepEqual(live[0].headers, {
+        Accept: "text/event-stream",
+        Authorization: "Bearer sse-token-xyz",
+        "X-Agentcue-Token": "sse-token-xyz",
+      });
 
       port.disconnect();
       await flush();

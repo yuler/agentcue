@@ -35,17 +35,30 @@ export type AgentExecutor = (
   invocation: AgentInvocation
 ) => Promise<AgentRunResult>;
 
+export interface BuildAgentCommandOptions {
+  /**
+   * Explicitly opt in to agent CLI permission/sandbox bypass flags
+   * (`--dangerously-skip-permissions`, `--yolo`,
+   * `--dangerously-bypass-approvals-and-sandbox`, `--approve`).
+   * Disabled by default for safety.
+   */
+  unsafeSkipPermissions?: boolean;
+}
+
 export function buildAgentCommand(
   agent: AgentId,
   prompt: string,
-  continueSession: boolean
+  continueSession: boolean,
+  options?: BuildAgentCommandOptions
 ): AgentCommandSpec {
+  const unsafe = options?.unsafeSkipPermissions ?? false;
+
   switch (agent) {
     case "agy":
       return {
         bin: "agy",
         args: [
-          "--dangerously-skip-permissions",
+          ...(unsafe ? ["--dangerously-skip-permissions"] : []),
           ...(continueSession ? ["--continue"] : []),
           "-p",
           prompt,
@@ -56,7 +69,7 @@ export function buildAgentCommand(
       return {
         bin: "claude",
         args: [
-          "--dangerously-skip-permissions",
+          ...(unsafe ? ["--dangerously-skip-permissions"] : []),
           ...(continueSession ? ["--continue"] : []),
           "-p",
           prompt,
@@ -67,7 +80,7 @@ export function buildAgentCommand(
       return {
         bin: "cursor-agent",
         args: [
-          "--yolo",
+          ...(unsafe ? ["--yolo"] : []),
           ...(continueSession ? ["--continue"] : []),
           "-p",
           prompt,
@@ -81,7 +94,7 @@ export function buildAgentCommand(
           args: [
             "exec",
             "resume",
-            "--dangerously-bypass-approvals-and-sandbox",
+            ...(unsafe ? ["--dangerously-bypass-approvals-and-sandbox"] : []),
             "--skip-git-repo-check",
             "--last",
             prompt,
@@ -92,7 +105,7 @@ export function buildAgentCommand(
         bin: "codex",
         args: [
           "exec",
-          "--dangerously-bypass-approvals-and-sandbox",
+          ...(unsafe ? ["--dangerously-bypass-approvals-and-sandbox"] : []),
           "--skip-git-repo-check",
           prompt,
         ],
@@ -102,7 +115,7 @@ export function buildAgentCommand(
       return {
         bin: "pi",
         args: [
-          "--approve",
+          ...(unsafe ? ["--approve"] : []),
           ...(continueSession ? ["--continue"] : []),
           "-p",
           "--",
@@ -224,6 +237,7 @@ export interface DispatcherOptions {
   defaultAgent?: AgentId;
   executor?: AgentExecutor;
   maxQueueSize?: number;
+  unsafeSkipPermissions?: boolean;
 }
 
 export interface Dispatcher {
@@ -299,7 +313,8 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
       const command = buildAgentCommand(
         next.payload.agent,
         next.prompt,
-        next.payload.continueSession
+        next.payload.continueSession,
+        { unsafeSkipPermissions: options.unsafeSkipPermissions }
       );
 
       let result: AgentRunResult;
