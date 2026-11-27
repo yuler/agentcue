@@ -10,6 +10,7 @@ export {
   type AgentExecutor,
   type AgentInvocation,
   type AgentRunResult,
+  type CommandLogEmit,
   type BuildAgentCommandOptions,
   type Dispatcher,
   type DispatcherOptions,

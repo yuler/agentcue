@@ -1,4 +1,4 @@
-// Shadow DOM template lives in ./dom.ts; icon feedback in ./feedback.ts; shortcuts in ./shortcuts.ts; transport in ./transport.ts
+// ./dom.ts template, ./feedback.ts, ./shortcuts.ts, ./transport.ts, ./command-log.ts
 import {
   buildCuePayload,
   computeStatusView,
@@ -16,6 +16,7 @@ import {
   syncBadgeDom,
   type ActivePin,
 } from "./dom.ts";
+import { attachCommandLog } from "./command-log.ts";
 import { createOverlayFeedback } from "./feedback.ts";
 import { handleOverlayKeydown } from "./shortcuts.ts";
 import {
@@ -561,6 +562,7 @@ export function mountOverlay(
         renderStatus();
       },
       onEvent: (event: ServerEvent) => {
+        commandLog.onEvent(event);
         if (event.type === "state") {
           const validAgents = Array.isArray(event.state?.agents)
             ? event.state.agents.filter((a): a is AgentId =>
@@ -609,6 +611,7 @@ export function mountOverlay(
     });
   }
 
+  const commandLog = attachCommandLog(shadow);
   renderAgentOptions();
   renderControls();
   renderStatus();
@@ -626,6 +629,7 @@ export function mountOverlay(
       renderControls();
     },
     destroy: () => {
+      commandLog.dispose();
       feedback.dispose();
       unsubscribeEvents();
       for (const cleanup of windowCleanups) cleanup();

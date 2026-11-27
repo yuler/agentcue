@@ -361,6 +361,7 @@ describe("@agentcue/extension P1 security boundary & UX lifecycle", () => {
           cueId: "cue-test-1",
           agent: "agy",
           durationMs: 1200,
+          log: "",
         },
       });
       assert.equal(launcherBtn.classList.contains("done"), true);

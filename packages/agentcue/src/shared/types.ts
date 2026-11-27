@@ -72,14 +72,22 @@ export interface DispatcherState {
 export type ServerEvent =
   | { type: "state"; state: DispatcherState }
   | {
+      type: "cue:log";
+      cueId: string;
+      append?: string;
+      replace?: string;
+    }
+  | {
       type: "cue:done";
       cueId: string;
       agent: AgentId;
       durationMs: number;
+      log: string;
     }
   | {
       type: "cue:error";
       cueId: string;
       agent: AgentId;
       error: string;
+      log: string;
     };

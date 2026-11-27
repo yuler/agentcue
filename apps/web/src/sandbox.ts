@@ -253,7 +253,13 @@ export function initSandbox() {
           execLine.innerHTML = `<span class="term-ok">✓ [agentcue]</span> <span class="term-bold">${escapeHtml(payload.agent)}</span> <span data-en="${escapeHtml(doneEn)}" data-zh="${escapeHtml(doneZh)}">${escapeHtml(curLang === "zh" ? doneZh : doneEn)}</span><span class="term-cursor" aria-hidden="true"></span>`;
         }
 
-        broadcast({ type: "cue:done", cueId, agent: payload.agent, durationMs: 650 });
+        broadcast({
+          type: "cue:done",
+          cueId,
+          agent: payload.agent,
+          durationMs: 650,
+          log: "",
+        });
         broadcast({ type: "state", state: { ...simState } });
       }, 650);
 

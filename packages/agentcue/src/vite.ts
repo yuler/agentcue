@@ -42,7 +42,10 @@ export interface AgentcueViteOptions {
   allowedOrigins?: string[];
   /** Additional allowed Host header values beyond loopback. */
   allowedHosts?: string[];
-  /** Explicitly opt in to agent CLI permission/sandbox bypass flags. */
+  /**
+   * Pass agent CLI permission/sandbox bypass flags.
+   * Default true. Set false to match `agentcue --safe`.
+   */
   unsafeSkipPermissions?: boolean;
 }
 

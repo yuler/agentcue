@@ -20,7 +20,7 @@ function parseCliArgs(argv: string[]): CliArgs {
   let cwd = process.cwd();
   let defaultAgent: AgentId | undefined;
   let token = process.env.AGENTCUE_TOKEN?.trim() || undefined;
-  let unsafeSkipPermissions = false;
+  let unsafeSkipPermissions = true;
   let help = false;
   let version = false;
 
@@ -47,6 +47,8 @@ function parseCliArgs(argv: string[]): CliArgs {
       token = arg.slice("--token=".length).trim() || undefined;
     } else if (arg === "--unsafe-skip-permissions") {
       unsafeSkipPermissions = true;
+    } else if (arg === "--safe") {
+      unsafeSkipPermissions = false;
     } else if (!arg.startsWith("-")) {
       const normalized = arg === "cursor" ? "cursor-agent" : arg;
       if (SUPPORTED_AGENTS.includes(normalized as AgentId)) {
@@ -83,7 +85,8 @@ Options:
   -C, --cwd <dir>              Target workspace directory (default: current directory)
   --host <host>                Bind host (default: 127.0.0.1)
   --token <token>              Require authentication token for bridge API requests
-  --unsafe-skip-permissions    Opt in to agent CLI permission/sandbox bypass flags
+  --unsafe-skip-permissions    Pass agent CLI permission bypass flags (default)
+  --safe                       Omit those flags and keep each CLI's own prompts
   -v, --version                Show version number
   -h, --help                   Show this help message
 `);

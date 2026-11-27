@@ -105,6 +105,8 @@ For local development builds: `mise run extension:build` → `packages/extension
 
 On Cursor, `--yolo` is an alias of `--force` (Run Everything).
 
+The bridge passes these flags by default. Use `agentcue --safe` when the agent CLI should keep its own permission prompts.
+
 ## Design Principles
 
 - **Push, not Pull** — Submitting a **Cue** triggers the selected CLI immediately in a serial FIFO queue with live SSE status in the browser capsule.
