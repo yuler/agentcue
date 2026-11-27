@@ -38,7 +38,7 @@ function formatCliPreview(agent: AgentId, continueSession: boolean): string {
     case "claude":
       return `claude --dangerously-skip-permissions${cont} -p "&lt;cue&gt;"`;
     case "cursor-agent":
-      return `cursor-agent --yolo${cont} -p "&lt;cue&gt;"`;
+      return `cursor-agent --force${cont} -p "&lt;cue&gt;"`;
     case "codex":
       return continueSession
         ? `codex exec resume --dangerously-bypass-approvals-and-sandbox --last "&lt;cue&gt;"`

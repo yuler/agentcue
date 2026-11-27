@@ -616,6 +616,18 @@ h2::after {
   font-size: 0.82rem;
 }
 
+.agent-table .posture {
+  display: block;
+  margin-bottom: 0.15rem;
+  color: var(--muted-color);
+  font-size: 0.75rem;
+}
+
+.agent-table td:last-child code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .shortcut-table th,
 .shortcut-table td,
 .agent-table th,
@@ -632,6 +644,12 @@ h2::after {
   color: var(--muted-color);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.agent-note {
+  margin-top: 0.7rem;
+  font-size: 0.82rem;
+  color: var(--muted-color);
 }
 
 /* Footer */
