@@ -95,13 +95,15 @@ For local development builds: `mise run extension:build` → `packages/extension
 
 ## Supported Agent Targets
 
-| Agent Target | CLI            | Auto-approve invocation (`Continue` adds `--continue` / `resume --last`) |
-| ------------ | -------------- | ------------------------------------------------------------------------ |
-| Antigravity  | `agy`          | `agy --dangerously-skip-permissions -p <prompt>`                         |
-| Claude Code  | `claude`       | `claude --dangerously-skip-permissions -p <prompt>`                      |
-| Cursor Agent | `cursor-agent` | `cursor-agent --yolo -p <prompt>`                                        |
-| OpenAI Codex | `codex`        | `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`         |
-| Pi           | `pi`           | `pi --approve -p -- <prompt>`                                            |
+| Agent Target | CLI            | Posture                      | Auto-approve invocation (`Continue` adds `--continue` / `resume --last`) |
+| ------------ | -------------- | ---------------------------- | ------------------------------------------------------------------------ |
+| Antigravity  | `agy`          | skip permissions             | `agy --dangerously-skip-permissions -p <prompt>`                         |
+| Claude Code  | `claude`       | skip permissions             | `claude --dangerously-skip-permissions -p <prompt>`                      |
+| Cursor Agent | `cursor-agent` | Run Everything               | `cursor-agent --force -p <prompt>`                                       |
+| OpenAI Codex | `codex`        | bypass approvals and sandbox | `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`         |
+| Pi           | `pi`           | trust project files          | `pi --approve -p -- <prompt>`                                            |
+
+On Cursor, `--yolo` is an alias of `--force` (Run Everything).
 
 The bridge passes these flags by default. Use `agentcue --safe` when the agent CLI should keep its own permission prompts.
 

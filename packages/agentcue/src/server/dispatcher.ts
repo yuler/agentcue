@@ -47,7 +47,7 @@ export type AgentExecutor = (
 export interface BuildAgentCommandOptions {
   /**
    * Pass agent CLI permission/sandbox bypass flags
-   * (`--dangerously-skip-permissions`, `--yolo`,
+   * (`--dangerously-skip-permissions`, `--force` (`--yolo` aliases it),
    * `--dangerously-bypass-approvals-and-sandbox`, `--approve`).
    * On by default. Set false to keep each CLI's own prompts (`--safe`).
    */
@@ -89,7 +89,7 @@ export function buildAgentCommand(
       return {
         bin: "cursor-agent",
         args: [
-          ...(unsafe ? ["--yolo"] : []),
+          ...(unsafe ? ["--force"] : []),
           ...(continueSession ? ["--continue"] : []),
           "-p",
           prompt,

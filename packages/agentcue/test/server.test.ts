@@ -66,7 +66,7 @@ describe("buildAgentCommand across all 5 Agent Targets", () => {
     });
     assert.deepEqual(buildAgentCommand("cursor-agent", "PROMPT", false), {
       bin: "cursor-agent",
-      args: ["--yolo", "-p", "PROMPT"],
+      args: ["--force", "-p", "PROMPT"],
     });
     assert.deepEqual(buildAgentCommand("codex", "PROMPT", false), {
       bin: "codex",
@@ -94,7 +94,7 @@ describe("buildAgentCommand across all 5 Agent Targets", () => {
     });
     assert.deepEqual(buildAgentCommand("cursor-agent", "NEXT", true), {
       bin: "cursor-agent",
-      args: ["--yolo", "--continue", "-p", "NEXT"],
+      args: ["--force", "--continue", "-p", "NEXT"],
     });
     assert.deepEqual(buildAgentCommand("codex", "NEXT", true), {
       bin: "codex",
