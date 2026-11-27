@@ -1,3 +1,4 @@
+import { COMMAND_LOG_CSS } from "./command-log.ts";
 import { OVERLAY_CSS } from "./styles.ts";
 import { extractPinContext, type FrameworkHints } from "./extract.ts";
 import type { AgentId, CuePayload, DispatcherState, PinContext } from "../shared/types.ts";
@@ -326,7 +327,7 @@ export function createOverlayDom(
   const shadow = host.attachShadow({ mode: shadowMode });
 
   shadow.innerHTML = `
-    <style>${OVERLAY_CSS}</style>
+    <style>${OVERLAY_CSS}${COMMAND_LOG_CSS}</style>
     <div class="hover-box" id="hoverBox"></div>
     <div class="hover-tag" id="hoverTag"></div>
     <div class="pins-layer" id="pinsLayer"></div>
@@ -348,6 +349,16 @@ export function createOverlayDom(
       </div>
     </div>
     <div class="capsule-wrap">
+      <div class="cmd-log" id="cmdLog" hidden>
+        <button class="cmd-log-bar" id="cmdLogToggle" type="button" aria-expanded="false">
+          <span class="cmd-log-chevron" id="cmdLogChevron">▸</span>
+          <span class="cmd-log-summary" id="cmdLogSummary"></span>
+        </button>
+        <div class="cmd-log-body" id="cmdLogBody" hidden>
+          <pre class="cmd-log-pre" id="cmdLogPre"></pre>
+          <button class="cmd-log-copy" id="cmdLogCopy" type="button">Copy</button>
+        </div>
+      </div>
       <div class="agent-menu" id="agentMenu">
         <div class="agent-menu-header">
           <span>Agent Target</span>

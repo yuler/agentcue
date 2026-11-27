@@ -55,67 +55,48 @@ const sampleCue = (
 });
 
 describe("buildAgentCommand across all 5 Agent Targets", () => {
-  it("omits permission and sandbox bypass flags by default in fresh mode", () => {
+  it("passes permission bypass flags by default in fresh mode", () => {
     assert.deepEqual(buildAgentCommand("agy", "PROMPT", false), {
-      bin: "agy",
-      args: ["-p", "PROMPT"],
-    });
-    assert.deepEqual(buildAgentCommand("claude", "PROMPT", false), {
-      bin: "claude",
-      args: ["-p", "PROMPT"],
-    });
-    assert.deepEqual(buildAgentCommand("cursor-agent", "PROMPT", false), {
-      bin: "cursor-agent",
-      args: ["-p", "PROMPT"],
-    });
-    assert.deepEqual(buildAgentCommand("codex", "PROMPT", false), {
-      bin: "codex",
-      args: ["exec", "--skip-git-repo-check", "PROMPT"],
-    });
-    assert.deepEqual(buildAgentCommand("pi", "PROMPT", false), {
-      bin: "pi",
-      args: ["-p", "--", "PROMPT"],
-    });
-  });
-
-  it("adds session continuation flags without unsafe bypass flags by default", () => {
-    assert.deepEqual(buildAgentCommand("agy", "NEXT", true), {
-      bin: "agy",
-      args: ["--continue", "-p", "NEXT"],
-    });
-    assert.deepEqual(buildAgentCommand("claude", "NEXT", true), {
-      bin: "claude",
-      args: ["--continue", "-p", "NEXT"],
-    });
-    assert.deepEqual(buildAgentCommand("cursor-agent", "NEXT", true), {
-      bin: "cursor-agent",
-      args: ["--continue", "-p", "NEXT"],
-    });
-    assert.deepEqual(buildAgentCommand("codex", "NEXT", true), {
-      bin: "codex",
-      args: ["exec", "resume", "--skip-git-repo-check", "--last", "NEXT"],
-    });
-    assert.deepEqual(buildAgentCommand("pi", "NEXT", true), {
-      bin: "pi",
-      args: ["--continue", "-p", "--", "NEXT"],
-    });
-  });
-
-  it("includes permission bypass flags only when unsafeSkipPermissions is explicitly enabled", () => {
-    const unsafe = { unsafeSkipPermissions: true };
-    assert.deepEqual(buildAgentCommand("agy", "PROMPT", false, unsafe), {
       bin: "agy",
       args: ["--dangerously-skip-permissions", "-p", "PROMPT"],
     });
-    assert.deepEqual(buildAgentCommand("claude", "NEXT", true, unsafe), {
+    assert.deepEqual(buildAgentCommand("claude", "PROMPT", false), {
       bin: "claude",
-      args: ["--dangerously-skip-permissions", "--continue", "-p", "NEXT"],
+      args: ["--dangerously-skip-permissions", "-p", "PROMPT"],
     });
-    assert.deepEqual(buildAgentCommand("cursor-agent", "PROMPT", false, unsafe), {
+    assert.deepEqual(buildAgentCommand("cursor-agent", "PROMPT", false), {
       bin: "cursor-agent",
       args: ["--yolo", "-p", "PROMPT"],
     });
-    assert.deepEqual(buildAgentCommand("codex", "NEXT", true, unsafe), {
+    assert.deepEqual(buildAgentCommand("codex", "PROMPT", false), {
+      bin: "codex",
+      args: [
+        "exec",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--skip-git-repo-check",
+        "PROMPT",
+      ],
+    });
+    assert.deepEqual(buildAgentCommand("pi", "PROMPT", false), {
+      bin: "pi",
+      args: ["--approve", "-p", "--", "PROMPT"],
+    });
+  });
+
+  it("adds session continuation flags alongside bypass flags by default", () => {
+    assert.deepEqual(buildAgentCommand("agy", "NEXT", true), {
+      bin: "agy",
+      args: ["--dangerously-skip-permissions", "--continue", "-p", "NEXT"],
+    });
+    assert.deepEqual(buildAgentCommand("claude", "NEXT", true), {
+      bin: "claude",
+      args: ["--dangerously-skip-permissions", "--continue", "-p", "NEXT"],
+    });
+    assert.deepEqual(buildAgentCommand("cursor-agent", "NEXT", true), {
+      bin: "cursor-agent",
+      args: ["--yolo", "--continue", "-p", "NEXT"],
+    });
+    assert.deepEqual(buildAgentCommand("codex", "NEXT", true), {
       bin: "codex",
       args: [
         "exec",
@@ -126,9 +107,33 @@ describe("buildAgentCommand across all 5 Agent Targets", () => {
         "NEXT",
       ],
     });
-    assert.deepEqual(buildAgentCommand("pi", "PROMPT", false, unsafe), {
+    assert.deepEqual(buildAgentCommand("pi", "NEXT", true), {
       bin: "pi",
-      args: ["--approve", "-p", "--", "PROMPT"],
+      args: ["--approve", "--continue", "-p", "--", "NEXT"],
+    });
+  });
+
+  it("omits permission bypass flags when unsafeSkipPermissions is false", () => {
+    const safe = { unsafeSkipPermissions: false };
+    assert.deepEqual(buildAgentCommand("agy", "PROMPT", false, safe), {
+      bin: "agy",
+      args: ["-p", "PROMPT"],
+    });
+    assert.deepEqual(buildAgentCommand("claude", "NEXT", true, safe), {
+      bin: "claude",
+      args: ["--continue", "-p", "NEXT"],
+    });
+    assert.deepEqual(buildAgentCommand("cursor-agent", "PROMPT", false, safe), {
+      bin: "cursor-agent",
+      args: ["-p", "PROMPT"],
+    });
+    assert.deepEqual(buildAgentCommand("codex", "NEXT", true, safe), {
+      bin: "codex",
+      args: ["exec", "resume", "--skip-git-repo-check", "--last", "NEXT"],
+    });
+    assert.deepEqual(buildAgentCommand("pi", "PROMPT", false, safe), {
+      bin: "pi",
+      args: ["-p", "--", "PROMPT"],
     });
   });
 });

@@ -2,6 +2,11 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { accessSync, constants } from "node:fs";
 import { delimiter, join } from "node:path";
+import {
+  createCommandLog,
+  failureReason,
+  type CommandLogEmit,
+} from "./command-log.ts";
 import { formatCuePrompt } from "../shared/prompt.ts";
 import {
   SUPPORTED_AGENTS,
@@ -10,6 +15,8 @@ import {
   type DispatcherState,
   type ServerEvent,
 } from "../shared/types.ts";
+
+export type { CommandLogEmit };
 
 export interface AgentCommandSpec {
   bin: string;
@@ -23,12 +30,14 @@ export interface AgentInvocation {
   prompt: string;
   cwd: string;
   command: AgentCommandSpec;
+  onLog?: (update: CommandLogEmit) => void;
 }
 
 export interface AgentRunResult {
   ok: boolean;
   exitCode: number | null;
   error?: string;
+  log?: string;
 }
 
 export type AgentExecutor = (
@@ -37,10 +46,10 @@ export type AgentExecutor = (
 
 export interface BuildAgentCommandOptions {
   /**
-   * Explicitly opt in to agent CLI permission/sandbox bypass flags
+   * Pass agent CLI permission/sandbox bypass flags
    * (`--dangerously-skip-permissions`, `--yolo`,
    * `--dangerously-bypass-approvals-and-sandbox`, `--approve`).
-   * Disabled by default for safety.
+   * On by default. Set false to keep each CLI's own prompts (`--safe`).
    */
   unsafeSkipPermissions?: boolean;
 }
@@ -51,7 +60,7 @@ export function buildAgentCommand(
   continueSession: boolean,
   options?: BuildAgentCommandOptions
 ): AgentCommandSpec {
-  const unsafe = options?.unsafeSkipPermissions ?? false;
+  const unsafe = options?.unsafeSkipPermissions !== false;
 
   switch (agent) {
     case "agy":
@@ -169,38 +178,37 @@ export function createSpawnExecutor(options?: {
         env: process.env,
       });
 
-      let stderrTail = "";
+      const log = createCommandLog();
+      const take = (chunk: Buffer, stream: NodeJS.WriteStream) => {
+        if (!quiet) stream.write(chunk);
+        const update = log.push(chunk.toString());
+        if (update) invocation.onLog?.(update);
+      };
 
-      child.stdout?.on("data", (chunk: Buffer) => {
-        if (!quiet) process.stdout.write(chunk);
-      });
-
-      child.stderr?.on("data", (chunk: Buffer) => {
-        const text = chunk.toString();
-        stderrTail = (stderrTail + text).slice(-600);
-        if (!quiet) process.stderr.write(chunk);
-      });
+      child.stdout?.on("data", (chunk: Buffer) => take(chunk, process.stdout));
+      child.stderr?.on("data", (chunk: Buffer) => take(chunk, process.stderr));
 
       child.on("error", (err) => {
+        const error = `Failed to start ${bin}: ${err.message}`;
         resolve({
           ok: false,
           exitCode: null,
-          error: `Failed to start ${bin}: ${err.message}`,
+          error,
+          log: log.text() || error,
         });
       });
 
       child.on("close", (code) => {
+        const transcript = log.text();
         if (code === 0) {
           if (!quiet) {
             console.log(
               `\x1b[32m✓ [agentcue]\x1b[0m ${invocation.agent} finished cue ${invocation.cueId.slice(0, 8)}\n`
             );
           }
-          resolve({ ok: true, exitCode: 0 });
+          resolve({ ok: true, exitCode: 0, log: transcript });
         } else {
-          const reason =
-            stderrTail.trim().split("\n").slice(-3).join(" ") ||
-            `${bin} exited with code ${code}`;
+          const reason = failureReason(transcript, bin, code);
           if (!quiet) {
             console.error(
               `\x1b[31m✗ [agentcue]\x1b[0m ${invocation.agent} failed: ${reason}\n`
@@ -210,6 +218,7 @@ export function createSpawnExecutor(options?: {
             ok: false,
             exitCode: code,
             error: reason,
+            log: transcript || reason,
           });
         }
       });
@@ -314,7 +323,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         next.payload.agent,
         next.prompt,
         next.payload.continueSession,
-        { unsafeSkipPermissions: options.unsafeSkipPermissions }
+        { unsafeSkipPermissions: options.unsafeSkipPermissions !== false }
       );
 
       let result: AgentRunResult;
@@ -326,6 +335,14 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
           prompt: next.prompt,
           cwd: options.cwd,
           command,
+          onLog: (update) => {
+            emit({
+              type: "cue:log",
+              cueId: next.cueId,
+              append: update.append,
+              replace: update.replace,
+            });
+          },
         });
       } catch (err) {
         result = {
@@ -353,12 +370,14 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
         },
       };
 
+      const log = result.log ?? "";
       if (result.ok) {
         emit({
           type: "cue:done",
           cueId: next.cueId,
           agent: next.payload.agent,
           durationMs,
+          log,
         });
       } else {
         emit({
@@ -366,6 +385,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatcher {
           cueId: next.cueId,
           agent: next.payload.agent,
           error: result.error || "Agent command failed",
+          log,
         });
       }
       emitState();

@@ -103,6 +103,8 @@ For local development builds: `mise run extension:build` → `packages/extension
 | OpenAI Codex | `codex`        | `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`         |
 | Pi           | `pi`           | `pi --approve -p -- <prompt>`                                            |
 
+The bridge passes these flags by default. Use `agentcue --safe` when the agent CLI should keep its own permission prompts.
+
 ## Design Principles
 
 - **Push, not Pull** — Submitting a **Cue** triggers the selected CLI immediately in a serial FIFO queue with live SSE status in the browser capsule.

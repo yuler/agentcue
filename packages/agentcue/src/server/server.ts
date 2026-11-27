@@ -99,6 +99,7 @@ export interface ServerOptions {
   token?: string;
   allowedOrigins?: string[];
   allowedHosts?: string[];
+  /** Pass agent CLI permission bypass flags. Default true. Set false for `--safe`. */
   unsafeSkipPermissions?: boolean;
 }
 
